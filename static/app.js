@@ -1,7 +1,8 @@
 /* MediCare HMS - single page frontend (vanilla JS) */
 const $ = (s, e = document) => e.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const money = v => "PKR " + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+let CURRENCY = localStorage.getItem("hms_currency") || "PKR";
+const money = v => CURRENCY + " " + Number(v || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 const MONEY_COLS = new Set(["total", "paid", "balance", "amount", "price", "unit_price", "fee", "daily_rate"]);
 const COLORS = ["#4f46e5", "#059669", "#e11d48", "#d97706", "#0284c7", "#7c3aed", "#ec4899", "#64748b"];
 const brandColor = () => getComputedStyle(document.documentElement).getPropertyValue("--brand").trim() || "#4f46e5";
@@ -21,6 +22,23 @@ if ($("#themeSelect")) {
   };
 }
 
+function applyBranding(cfg) {
+  if (!cfg) return;
+  if (cfg.currency) {
+    CURRENCY = cfg.currency;
+    localStorage.setItem("hms_currency", cfg.currency);
+  }
+  const hName = cfg.hospital_name || "MediCare General Hospital";
+  const logo = cfg.logo_icon || "✚";
+  const tag = cfg.tagline || "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing";
+  document.title = hName + " — HMS";
+  if ($("#loginLogo")) $("#loginLogo").textContent = logo;
+  if ($("#loginHospitalName")) $("#loginHospitalName").textContent = hName;
+  if ($("#loginTagline")) $("#loginTagline").textContent = tag;
+  const sbBrand = $("#sidebar .brand");
+  if (sbBrand) sbBrand.innerHTML = `<div class="logo">${esc(logo)}</div>${esc(hName)}`;
+}
+
 async function api(path, opts = {}) {
   const r = await fetch("/api" + path, { method: opts.method || "GET", headers: { "Content-Type": "application/json" }, body: opts.body ? JSON.stringify(opts.body) : undefined });
   const data = await r.json().catch(() => ({}));
@@ -37,7 +55,14 @@ function badge(v) { const c = GOOD.includes(v) ? "b-ok" : BAD.includes(v) ? "b-b
 const BADGE_COLS = new Set(["status"]);
 
 /* ---------- auth ---------- */
-function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); }
+async function showLogin() {
+  $("#app").classList.add("hidden");
+  $("#login").classList.remove("hidden");
+  try {
+    const pub = await fetch("/api/public-config").then(r => r.ok ? r.json() : null).catch(() => null);
+    if (pub) applyBranding(pub);
+  } catch {}
+}
 $("#loginForm").onsubmit = async e => {
   e.preventDefault(); const f = new FormData(e.target);
   try { await api("/login", { method: "POST", body: Object.fromEntries(f) }); $("#loginErr").textContent = ""; e.target.reset(); boot(); }
@@ -61,27 +86,33 @@ function closeModal() { $("#modal").classList.add("hidden"); }
 /* ---------- boot / navigation ---------- */
 async function boot() {
   try { META = await api("/meta"); } catch { return showLogin(); }
+  if (META.settings) applyBranding(META.settings);
   $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
   const u = META.user; $("#uName").textContent = u.full_name; $("#uRole").textContent = u.role; $("#avatar").textContent = u.full_name.replace(/^Dr\.\s*/, "")[0];
+  const logo = META.settings?.logo_icon || "✚";
   const groups = {};
   META.resources.forEach(r => (groups[r.group] ||= []).push(r));
-  let h = `<div class="brand"><div class="logo">✚</div>${esc(META.hospital)}</div>`;
+  let h = `<div class="brand"><div class="logo">${esc(logo)}</div>${esc(META.hospital)}</div>`;
   h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
+  h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup &amp; Master Data</div>`;
   h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
-  if (META.user.role === "Admin") h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
+  if (META.user.role === "Admin") {
+    h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
+  }
   for (const [g, list] of Object.entries(groups)) { h += `<div class="sgroup">${g}</div>`; list.forEach(r => h += `<div class="nav" data-go="${r.key}"><span>${r.icon}</span>${esc(r.label)}</div>`); }
   $("#sidebar").innerHTML = h;
   go(location.hash.slice(1) || "dashboard");
 }
 $("#sidebar").onclick = e => { const n = e.target.closest("[data-go]"); if (n) { go(n.dataset.go); $("#sidebar").classList.remove("open"); } };
 function go(key) {
-  if (!["dashboard", "reports", "gemini_ai", "db_studio"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
+  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
   current = key; location.hash = key;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
   if (key === "gemini_ai") { $("#pageTitle").textContent = "✨ Gemini AI Clinical & Operations Hub"; return renderGeminiHub(); }
   if (key === "reports") { $("#pageTitle").textContent = "Reports & Analytics"; return renderReports(); }
+  if (key === "settings") { $("#pageTitle").textContent = "⚙️ Hospital Setup & Master Data"; return renderSettings(); }
   if (key === "db_studio") { $("#pageTitle").textContent = "🗄️ Database Studio & SQLite Explorer"; return renderDbStudio(); }
   const r = META.resources.find(r => r.key === key); $("#pageTitle").textContent = r.label; renderTable(r);
 }
@@ -140,7 +171,7 @@ async function renderDashboard() {
     ${canW("lab_orders") ? `<button class="btn sm" data-qa="lab_orders">🔬 Order Lab Test</button>` : ""}
     ${canW("dispensing") ? `<button class="btn sm" data-qa="dispensing">💊 Dispense Medicine</button>` : ""}
     <button class="btn sm" onclick="go('gemini_ai')">✨ Gemini AI Triage &amp; Copilot</button>
-    ${META.user.role === "Admin" ? `<button class="btn sm" onclick="go('db_studio')">🗄️ Database Studio</button>` : ""}
+    ${META.user.role === "Admin" ? `<button class="btn sm" onclick="go('settings')">⚙️ Hospital Setup</button><button class="btn sm" onclick="go('db_studio')">🗄️ Database Studio</button>` : ""}
   </div>
   <div class="grid kpis">
     ${kp("🧑‍🤝‍🧑", "#dff3f4", k.patients, `Total patients (+${k.new_patients_month} this month)`, can("patients") && "patients")}
@@ -152,7 +183,7 @@ async function renderDashboard() {
     ${kp("🔬", "#e4effb", k.pending_labs, "Pending lab orders", can("lab_orders") && "lab_orders")}
     ${kp("💊", "#fdf0d3", k.low_stock + " / " + k.expiring, "Low stock / expiring ≤90d", can("medicines") && "medicines")}
   </div>
-  <div class="grid cols2">${card("Appointments – last 7 days", "c1")}${card("Revenue collected (PKR) – last 14 days", "c2")}</div>
+  <div class="grid cols2">${card("Appointments – last 7 days", "c1")}${card(`Revenue collected (${CURRENCY}) – last 14 days`, "c2")}</div>
   <div class="grid cols2">${card("Bed occupancy by ward", "", '<div id="wardBars"></div>')}${card("Appointments by department", "c3")}</div>
   <div class="grid cols2">${card("Appointment status", "c4")}${card("Invoice status", "c5")}</div>
   <div class="grid cols2">
@@ -167,7 +198,7 @@ async function renderDashboard() {
   });
   const draw = () => {
     if (current !== "dashboard") return;
-    barChart($("#c1"), d.appointments_7d); lineChart($("#c2"), d.revenue_14d, "#1f9d6b", v => "PKR " + (v >= 1000 ? Math.round(v / 1000) + "k" : v));
+    barChart($("#c1"), d.appointments_7d); lineChart($("#c2"), d.revenue_14d, "#1f9d6b", v => CURRENCY + " " + (v >= 1000 ? Math.round(v / 1000) + "k" : v));
     hbars($("#wardBars"), d.wards.map(w => ({ label: `${w.name} (${w.occupied || 0}/${w.total})`, value: w.occupied || 0 })));
     $("#wardBars").querySelectorAll(".bar i").forEach((b, i) => b.style.width = (d.wards[i].total ? (d.wards[i].occupied || 0) / d.wards[i].total * 100 : 0) + "%");
     barChart($("#c3"), d.by_department.map(x => ({ label: x.label.slice(0, 8), value: x.value })), "#7b61c9");
@@ -182,14 +213,14 @@ async function renderReports() {
   let d; try { d = await api("/reports"); } catch (e) { return fail(e); }
   const tot = d.revenue_30d.reduce((a, x) => a + x.value, 0);
   $("#view").innerHTML = `
-  <div class="grid cols2" style="grid-template-columns:1fr">${card(`Revenue (PKR) – last 30 days (total ${money(tot)})`, "r1")}</div>
-  <div class="grid cols2">${card("Payment methods (PKR)", "r2")}${card("Patients by age group", "r3")}</div>
+  <div class="grid cols2" style="grid-template-columns:1fr">${card(`Revenue (${CURRENCY}) – last 30 days (total ${money(tot)})`, "r1")}</div>
+  <div class="grid cols2">${card(`Payment methods (${CURRENCY})`, "r2")}${card("Patients by age group", "r3")}</div>
   <div class="grid cols2">${card("Top diagnoses", "", '<div id="h1"></div>')}${card("Most dispensed medicines (units)", "", '<div id="h2"></div>')}</div>
   <div class="grid cols2">${card("Lab test usage", "", '<div id="h3"></div>')}${card("Patients by gender", "r4")}</div>
   ${card("Doctor workload", "", miniTable([["doctor", "Doctor"], ["department", "Department"], ["appointments", "Appointments"], ["consultations", "Consultations"], ["admissions", "Admissions"]], d.doctor_workload))}`;
   const draw = () => {
     if (current !== "reports") return;
-    lineChart($("#r1"), d.revenue_30d, "#0e7c86", v => "PKR " + (v >= 1000 ? Math.round(v / 1000) + "k" : v));
+    lineChart($("#r1"), d.revenue_30d, "#0e7c86", v => CURRENCY + " " + (v >= 1000 ? Math.round(v / 1000) + "k" : v));
     donut($("#r2"), d.payment_methods.map(x => ({ ...x, value: Math.round(x.value) })), v => money(v)); barChart($("#r3"), d.age_groups.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })), "#e69a1c"); donut($("#r4"), d.gender);
     hbars($("#h1"), d.top_diagnoses); hbars($("#h2"), d.top_medicines); hbars($("#h3"), d.lab_usage);
   };
@@ -428,21 +459,22 @@ async function openInvoice(id, done) {
     const bal = inv.total - inv.paid;
     openModal(`${inv.number} · ${inv.patient}`, `
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><div><b>${esc(inv.patient)}</b> <span class="muted">(${esc(inv.mrn)})</span><br><span class="muted small">${esc(inv.phone || "")} ${esc(inv.address || "")}</span></div><div style="text-align:right">${badge(inv.status)}<br><span class="muted small">${esc(inv.date)}</span></div></div>
-    <div class="sec">Line items (PKR)</div>
-    <table class="mini"><tr><th>Description</th><th style="text-align:right">Amount (PKR)</th><th></th></tr>${inv.items.map(i => `<tr><td>${esc(i.description)}</td><td style="text-align:right">${money(i.amount)}</td><td>${res.canWrite ? `<button class="btn sm danger" data-del="${i.id}">✕</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">No items yet</td></tr>'}
+    <div class="sec">Line items (${CURRENCY})</div>
+    <table class="mini"><tr><th>Description</th><th style="text-align:right">Amount (${CURRENCY})</th><th></th></tr>${inv.items.map(i => `<tr><td>${esc(i.description)}</td><td style="text-align:right">${money(i.amount)}</td><td>${res.canWrite ? `<button class="btn sm danger" data-del="${i.id}">✕</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">No items yet</td></tr>'}
     <tr><th>Total</th><th style="text-align:right">${money(inv.total)}</th><th></th></tr><tr><td>Paid</td><td style="text-align:right">${money(inv.paid)}</td><td></td></tr><tr><td><b>Balance due</b></td><td style="text-align:right"><b>${money(bal)}</b></td><td></td></tr></table>
-    ${res.canWrite ? `<form id="itemF" class="form" style="margin-top:10px;grid-template-columns:2fr 1fr auto"><input name="description" placeholder="Add charge (e.g. Room service)" required><input name="amount" type="number" step="any" min="0" placeholder="Amount (PKR)" required><button class="btn">Add</button></form>` : ""}
-    <div class="sec">Payments (PKR)</div>
-    ${inv.payments.length ? miniTable([["date", "Date"], ["method", "Method"], ["amount", "Amount (PKR)", money]], inv.payments) : '<span class="muted">No payments yet</span>'}
-    ${res.canWrite && bal > 0.001 ? `<form id="payF" class="form" style="margin-top:10px;grid-template-columns:1fr 1fr auto"><input name="amount" type="number" step="any" min="0" placeholder="Amount (PKR)" value="${bal.toFixed(2)}" required><select name="method"><option>Cash</option><option>Card</option><option>UPI</option><option>Insurance</option><option>Bank transfer</option></select><button class="btn primary">Record payment (PKR)</button></form>` : ""}
+    ${res.canWrite ? `<form id="itemF" class="form" style="margin-top:10px;grid-template-columns:2fr 1fr auto"><input name="description" placeholder="Add charge (e.g. Room service)" required><input name="amount" type="number" step="any" min="0" placeholder="Amount (${CURRENCY})" required><button class="btn">Add</button></form>` : ""}
+    <div class="sec">Payments (${CURRENCY})</div>
+    ${inv.payments.length ? miniTable([["date", "Date"], ["method", "Method"], ["amount", `Amount (${CURRENCY})`, money]], inv.payments) : '<span class="muted">No payments yet</span>'}
+    ${res.canWrite && bal > 0.001 ? `<form id="payF" class="form" style="margin-top:10px;grid-template-columns:1fr 1fr auto"><input name="amount" type="number" step="any" min="0" placeholder="Amount (${CURRENCY})" value="${bal.toFixed(2)}" required><select name="method"><option>Cash</option><option>Card</option><option>UPI</option><option>Insurance</option><option>Bank transfer</option></select><button class="btn primary">Record payment (${CURRENCY})</button></form>` : ""}
     <div class="form-foot"><button class="btn" id="printBtn">🖨 Print</button></div>`, true);
     const bind = (sel, fn) => { const f = $(sel); if (f) f.onsubmit = async e => { e.preventDefault(); try { render(await fn(Object.fromEntries(new FormData(f)))); done(); toast("Saved"); } catch (err) { fail(err); } }; };
     bind("#itemF", b => api(`/invoices/${id}/items`, { method: "POST", body: b }));
     bind("#payF", b => api(`/invoices/${id}/payments`, { method: "POST", body: b }));
     document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { await api(`/invoice_items/${b.dataset.del}`, { method: "DELETE" }); render(await api(`/invoices/${id}`)); done(); });
     $("#printBtn").onclick = () => {
+      const hi = inv.hospital_info || META.settings || {};
       const w = window.open("", "_blank", "width=800,height=900");
-      w.document.write(`<title>${inv.number}</title><body style="font-family:sans-serif;max-width:700px;margin:30px auto"><h1>${esc(inv.hospital)}</h1><h2>Invoice ${inv.number}</h2><p>Patient: <b>${esc(inv.patient)}</b> (${esc(inv.mrn)})<br>Date: ${inv.date}</p><table width="100%" cellpadding="6" style="border-collapse:collapse">${inv.items.map(i => `<tr style="border-bottom:1px solid #ddd"><td>${esc(i.description)}</td><td align="right">${money(i.amount)}</td></tr>`).join("")}<tr><td><b>Total</b></td><td align="right"><b>${money(inv.total)}</b></td></tr><tr><td>Paid</td><td align="right">${money(inv.paid)}</td></tr><tr><td><b>Balance</b></td><td align="right"><b>${money(bal)}</b></td></tr></table><p style="margin-top:40px;color:#777">Thank you. Wishing you good health.</p></body>`);
+      w.document.write(`<title>${inv.number}</title><body style="font-family:sans-serif;max-width:700px;margin:30px auto"><div style="border-bottom:2px solid #222;padding-bottom:10px;margin-bottom:16px"><h1 style="margin:0">${esc(hi.logo_icon || "✚")} ${esc(inv.hospital)}</h1><div style="color:#555;font-size:13px">${esc(hi.address || "")} · Tel: ${esc(hi.phone || "")} ${hi.tax_id ? `· Tax/NTN: ${esc(hi.tax_id)}` : ""}</div></div><h2>Invoice ${inv.number}</h2><p>Patient: <b>${esc(inv.patient)}</b> (${esc(inv.mrn)})<br>Date: ${inv.date}</p><table width="100%" cellpadding="6" style="border-collapse:collapse">${inv.items.map(i => `<tr style="border-bottom:1px solid #ddd"><td>${esc(i.description)}</td><td align="right">${money(i.amount)}</td></tr>`).join("")}<tr><td><b>Total</b></td><td align="right"><b>${money(inv.total)}</b></td></tr><tr><td>Paid</td><td align="right">${money(inv.paid)}</td></tr><tr><td><b>Balance</b></td><td align="right"><b>${money(bal)}</b></td></tr></table><p style="margin-top:40px;color:#777">${esc(hi.invoice_footer || "Thank you. Wishing you good health.")}</p></body>`);
       w.document.close(); w.print();
     };
   };
@@ -866,7 +898,7 @@ async function renderDbStudio() {
     try {
       const r = await api("/db/query", { method: "POST", body: { sql } }).catch(() => fallbackDbQuery(sql));
       $("#sqlMeta").textContent = `${r.count} row(s) returned`;
-      $("#sqlOut").innerHTML = r.columns.length ? `<table class="t"><tr>${r.columns.map(c => `<th>${esc(MONEY_COLS.has(c) ? c + " (PKR)" : c)}</th>`).join("")}</tr>${r.rows.map(row => `<tr>${r.columns.map(c => `<td class="${MONEY_COLS.has(c) ? "num" : ""}">${MONEY_COLS.has(c) && row[c] !== null && row[c] !== undefined && row[c] !== "" ? money(row[c]) : esc(row[c] ?? "—")}</td>`).join("")}</tr>`).join("")}</table>` : '<div class="muted" style="padding:12px">No rows</div>';
+      $("#sqlOut").innerHTML = r.columns.length ? `<table class="t"><tr>${r.columns.map(c => `<th>${esc(MONEY_COLS.has(c) ? c + ` (${CURRENCY})` : c)}</th>`).join("")}</tr>${r.rows.map(row => `<tr>${r.columns.map(c => `<td class="${MONEY_COLS.has(c) ? "num" : ""}">${MONEY_COLS.has(c) && row[c] !== null && row[c] !== undefined && row[c] !== "" ? money(row[c]) : esc(row[c] ?? "—")}</td>`).join("")}</tr>`).join("")}</table>` : '<div class="muted" style="padding:12px">No rows</div>';
     } catch (err) { $("#sqlMeta").textContent = ""; fail(err); }
   };
   $("#sqlF").onsubmit = e => { e.preventDefault(); runSql($("#sqlBox").value); };
@@ -880,6 +912,421 @@ async function renderDbStudio() {
     }
   };
   runSql($("#sqlBox").value);
+}
+
+/* ---------- Hospital Setup & Master Data (Multi-Hospital Onboarding) ---------- */
+let _activeMasterTab = "doctors";
+
+async function fallbackHospitalSetup() {
+  const [departments, staff, wards, beds, lab_tests, medicines, patients] = await Promise.all([
+    api("/r/departments").catch(() => []),
+    api("/r/staff").catch(() => []),
+    api("/r/wards").catch(() => []),
+    api("/r/beds").catch(() => []),
+    api("/r/lab_tests").catch(() => []),
+    api("/r/medicines").catch(() => []),
+    api("/r/patients").catch(() => []),
+  ]);
+  const saved = JSON.parse(localStorage.getItem("hms_local_settings") || "null") || {};
+  const settings = {
+    hospital_name: saved.hospital_name || META?.hospital || "MediCare General Hospital",
+    tagline: saved.tagline || "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing",
+    logo_icon: saved.logo_icon || "✚",
+    currency: saved.currency || CURRENCY || "PKR",
+    address: saved.address || "Main Boulevard, Gulberg III, Lahore, Pakistan",
+    phone: saved.phone || "+92-42-111-222-333",
+    emergency_phone: saved.emergency_phone || "1122 / +92-42-111-911-911",
+    email: saved.email || "info@medicare-hospital.pk",
+    website: saved.website || "www.medicare-hospital.pk",
+    tax_id: saved.tax_id || "NTN-8492015-7",
+    mrn_prefix: saved.mrn_prefix || "MRN",
+    invoice_prefix: saved.invoice_prefix || "INV",
+    invoice_footer: saved.invoice_footer || "Thank you for choosing our hospital. Wishing you good health.",
+    default_theme: saved.default_theme || localStorage.getItem("hms_theme") || "indigo",
+  };
+  return {
+    settings,
+    presets: [
+      { id: "medicare", hospital_name: "MediCare General Hospital", tagline: "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing", logo_icon: "✚", currency: "PKR", address: "Main Boulevard, Gulberg III, Lahore, Pakistan", phone: "+92-42-111-222-333", emergency_phone: "1122 / +92-42-111-911-911", email: "info@medicare-hospital.pk", website: "www.medicare-hospital.pk", tax_id: "NTN-8492015-7", mrn_prefix: "MRN", invoice_prefix: "INV", invoice_footer: "Thank you for choosing MediCare General Hospital.", default_theme: "indigo" },
+      { id: "alshifa", hospital_name: "Al-Shifa International Hospital", tagline: "Tertiary Care & Multi-Specialty Medical Center", logo_icon: "🏥", currency: "PKR", address: "Sector H-8/4, Pitras Bukhari Road, Islamabad, Pakistan", phone: "+92-51-846-3000", emergency_phone: "+92-51-846-4646", email: "care@alshifa-international.pk", website: "www.alshifa-international.pk", tax_id: "NTN-4109283-1", mrn_prefix: "ASH", invoice_prefix: "ASH-INV", invoice_footer: "Al-Shifa International Hospital — Committed to Clinical Excellence.", default_theme: "emerald" },
+      { id: "citycare", hospital_name: "City Care & Trauma Center", tagline: "24/7 Emergency, Cardiology, Surgery & Diagnostics", logo_icon: "⚕", currency: "PKR", address: "Shahrah-e-Faisal, Block 6 PECHS, Karachi, Pakistan", phone: "+92-21-3452-8800", emergency_phone: "1020 / +92-21-3452-8899", email: "admin@citycarekarachi.pk", website: "www.citycarekarachi.pk", tax_id: "NTN-7721904-9", mrn_prefix: "CCK", invoice_prefix: "CCK-BILL", invoice_footer: "City Care & Trauma Center · 24-Hour Emergency & Pharmacy Services.", default_theme: "sapphire" },
+      { id: "children_maternity", hospital_name: "Noor Mother & Child Specialist Hospital", tagline: "Obstetrics, Gynecology, Neonatology & Pediatric Care", logo_icon: "🤱", currency: "PKR", address: "University Road, Hayatabad Phase 3, Peshawar, Pakistan", phone: "+92-91-582-4400", emergency_phone: "+92-91-582-4499", email: "info@noorhospital.pk", website: "www.noorhospital.pk", tax_id: "NTN-5591023-4", mrn_prefix: "NMC", invoice_prefix: "NMC-INV", invoice_footer: "Noor Mother & Child Specialist Hospital — Caring for Every Generation.", default_theme: "crimson" },
+    ],
+    master: { departments, staff, wards, lab_tests, medicines },
+    counts: {
+      departments: departments.length,
+      doctors: staff.filter(s => s.role === "Doctor").length,
+      staff_total: staff.length,
+      wards: wards.length,
+      beds: beds.length,
+      lab_tests: lab_tests.length,
+      medicines: medicines.length,
+      patients: patients.length,
+    },
+  };
+}
+
+async function renderSettings() {
+  $("#view").innerHTML = "Loading Hospital Setup & Master Data…";
+  let data;
+  try {
+    data = await api("/settings").catch(() => fallbackHospitalSetup());
+  } catch (e) { return fail(e); }
+
+  const s = data.settings;
+  const c = data.counts;
+  const m = data.master;
+  const presets = data.presets || [];
+
+  $("#view").innerHTML = `
+  <div class="card hero-banner">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <h3 style="margin:0 0 6px">⚙️ Multi-Hospital White-Label Setup &amp; Master Data Center</h3>
+        <div style="font-size:13px;opacity:.92">Configure this application for <b>any hospital</b>: customize Hospital Identity, Currency, Prefixes, Doctors, Departments, Wards/Beds, Lab Tariffs, and Pharmacy Formulary.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" id="cleanSlateBtn" style="background:#ffffff24;border-color:#ffffff55" title="Wipes demo patients/invoices while keeping all Master Data">🚀 Go-Live Clean Slate (Clear Demo Patients)</button>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #ffffff30;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px">
+      <span>🏥 <b>Quick-Load Hospital Profile Preset:</b></span>
+      ${presets.map(p => `<button type="button" class="btn sm" data-preset="${esc(p.id)}" style="background:#fff;color:#111827;border:none">${esc(p.logo_icon)} ${esc(p.hospital_name)}</button>`).join("")}
+    </div>
+  </div>
+
+  <div class="grid kpis" style="margin-bottom:16px">
+    <div class="card kpi" data-mtab="doctors" style="cursor:pointer"><div class="ic" style="background:#e0e7ff">👩‍⚕️</div><div><div class="v">${c.doctors} / ${c.staff_total}</div><div class="l">Doctors / Total Staff</div></div></div>
+    <div class="card kpi" data-mtab="departments" style="cursor:pointer"><div class="ic" style="background:#dcfce7">🏢</div><div><div class="v">${c.departments}</div><div class="l">Clinical Departments</div></div></div>
+    <div class="card kpi" data-mtab="wards" style="cursor:pointer"><div class="ic" style="background:#fef3c7">🏥</div><div><div class="v">${c.wards} (${c.beds} beds)</div><div class="l">Wards &amp; Inpatient Beds</div></div></div>
+    <div class="card kpi" data-mtab="labs" style="cursor:pointer"><div class="ic" style="background:#e0f2fe">🧪</div><div><div class="v">${c.lab_tests} / ${c.medicines}</div><div class="l">Lab Tests / Medicines</div></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <h4>🏛️ 1. Hospital Identity, Branding, Currency &amp; Invoice Configuration</h4>
+    <p class="muted small" style="margin-top:-4px;margin-bottom:12px">Updating these settings immediately rebrands the Sidebar, Login Screen, Browser Title, Currency Formatter, MRN generator, and Printable Invoices.</p>
+    <form id="hospSettingsF" class="form" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">
+      <label><b>Hospital Name *</b><input name="hospital_name" value="${esc(s.hospital_name)}" required placeholder="e.g. Shaukat Khanum Memorial Hospital"></label>
+      <label><b>Tagline / Subtitle</b><input name="tagline" value="${esc(s.tagline)}" placeholder="e.g. Tertiary Care & Research Center"></label>
+      <label><b>Logo Icon / Symbol</b>
+        <select name="logo_icon">
+          ${["✚", "🏥", "⚕", "🤱", "❤️", "🩺", "🔬"].map(ic => `<option value="${ic}" ${s.logo_icon === ic ? "selected" : ""}>${ic} Symbol</option>`).join("")}
+        </select>
+      </label>
+      <label><b>Hospital Currency *</b>
+        <select name="currency">
+          ${[
+            ["PKR", "PKR — Pakistani Rupee (Rs)"],
+            ["USD", "USD — US Dollar ($)"],
+            ["AED", "AED — UAE Dirham"],
+            ["SAR", "SAR — Saudi Riyal"],
+            ["GBP", "GBP — British Pound (£)"],
+            ["EUR", "EUR — Euro (€)"],
+          ].map(([k, lbl]) => `<option value="${k}" ${s.currency === k ? "selected" : ""}>${lbl}</option>`).join("")}
+        </select>
+      </label>
+      <label><b>Default Color Theme</b>
+        <select name="default_theme">
+          ${[
+            ["indigo", "🎨 Royal Indigo"],
+            ["emerald", "🌿 Emerald Forest"],
+            ["crimson", "🌹 Crimson Rose"],
+            ["sapphire", "💎 Ocean Sapphire"],
+            ["midnight", "🌙 Dark Midnight"],
+          ].map(([k, lbl]) => `<option value="${k}" ${s.default_theme === k ? "selected" : ""}>${lbl}</option>`).join("")}
+        </select>
+      </label>
+      <label><b>Patient MRN Prefix</b><input name="mrn_prefix" value="${esc(s.mrn_prefix)}" placeholder="e.g. MRN or PAT"></label>
+      <label><b>Invoice Number Prefix</b><input name="invoice_prefix" value="${esc(s.invoice_prefix)}" placeholder="e.g. INV or BILL"></label>
+      <label><b>Tax / NTN / Reg Number</b><input name="tax_id" value="${esc(s.tax_id)}" placeholder="e.g. NTN-8492015-7"></label>
+      <label><b>Main Phone Number</b><input name="phone" value="${esc(s.phone)}" placeholder="e.g. +92-42-111-222-333"></label>
+      <label><b>Emergency Helpline</b><input name="emergency_phone" value="${esc(s.emergency_phone)}" placeholder="e.g. 1122 / +92-42-111-911"></label>
+      <label><b>Official Email</b><input name="email" value="${esc(s.email)}" placeholder="e.g. info@hospital.pk"></label>
+      <label><b>Website</b><input name="website" value="${esc(s.website)}" placeholder="e.g. www.hospital.pk"></label>
+      <label style="grid-column:1/-1"><b>Hospital Physical Address</b><input name="address" value="${esc(s.address)}" placeholder="Full street address and city (printed on patient invoices)"></label>
+      <label style="grid-column:1/-1"><b>Printable Invoice Footer Note</b><input name="invoice_footer" value="${esc(s.invoice_footer)}" placeholder="e.g. Thank you for choosing our hospital. Wishing you good health."></label>
+      <div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:8px;margin-top:4px">
+        <button class="btn primary">💾 Save Hospital Profile &amp; Apply Everywhere</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <h4 style="margin:0">🗂️ 2. Master Data Onboarding &amp; Configuration</h4>
+      <div class="chips" id="masterTabs">
+        <button class="chip ${_activeMasterTab === "doctors" ? "active" : ""}" data-mtab="doctors">👩‍⚕️ Doctors &amp; Staff (${c.staff_total})</button>
+        <button class="chip ${_activeMasterTab === "departments" ? "active" : ""}" data-mtab="departments">🏢 Departments (${c.departments})</button>
+        <button class="chip ${_activeMasterTab === "wards" ? "active" : ""}" data-mtab="wards">🏥 Wards &amp; Beds (${c.wards})</button>
+        <button class="chip ${_activeMasterTab === "labs" ? "active" : ""}" data-mtab="labs">🧪 Lab Test Tariffs (${c.lab_tests})</button>
+        <button class="chip ${_activeMasterTab === "medicines" ? "active" : ""}" data-mtab="medicines">💊 Pharmacy Formulary (${c.medicines})</button>
+      </div>
+    </div>
+    <div id="masterTabBody"></div>
+  </div>`;
+
+  const applySettingsResp = async body => {
+    localStorage.setItem("hms_local_settings", JSON.stringify(body));
+    const res = await api("/settings", { method: "POST", body }).catch(() => ({ ok: true, settings: body }));
+    const updated = res.settings || body;
+    META.hospital = updated.hospital_name;
+    META.settings = updated;
+    applyBranding(updated);
+    if (updated.default_theme) applyTheme(updated.default_theme);
+    toast(`Saved settings for ${updated.hospital_name}`);
+    META = await api("/meta").catch(() => META);
+    renderSettings();
+  };
+
+  $("#hospSettingsF").onsubmit = async e => {
+    e.preventDefault();
+    try {
+      await applySettingsResp(Object.fromEntries(new FormData(e.target)));
+    } catch (err) { fail(err); }
+  };
+
+  document.querySelectorAll("[data-preset]").forEach(b => b.onclick = async () => {
+    const preset = presets.find(p => p.id === b.dataset.preset);
+    if (!preset) return;
+    if (confirm(`Load hospital profile preset "${preset.hospital_name}"? You can customize any field afterwards.`)) {
+      await applySettingsResp(preset);
+    }
+  });
+
+  $("#cleanSlateBtn").onclick = async () => {
+    const hName = $("#hospSettingsF [name='hospital_name']").value || s.hospital_name;
+    if (!confirm(`Initialize Clean-Slate Go-Live for "${hName}"?\n\nThis will DELETE all demo patients, appointments, consultations, admissions, lab orders, and invoices, and mark all beds Available — while KEEPING all your configured Master Data (Settings, Departments, Doctors, Wards/Beds, Lab Tests, and Medicines).`)) return;
+    try {
+      const formBody = Object.fromEntries(new FormData($("#hospSettingsF")));
+      await api("/settings/clean-slate", { method: "POST", body: formBody });
+      toast(`${hName} is now in Clean-Slate Go-Live mode (0 demo patients)!`);
+      renderSettings();
+    } catch (err) { fail(err); }
+  };
+
+  const drawMasterTab = () => {
+    document.querySelectorAll("#masterTabs .chip").forEach(ch => ch.classList.toggle("active", ch.dataset.mtab === _activeMasterTab));
+    const box = $("#masterTabBody");
+    if (_activeMasterTab === "doctors") {
+      const deptOpts = `<option value="">— Select existing department —</option>` + m.departments.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join("");
+      box.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--line);padding:12px;border-radius:10px;margin-bottom:14px">
+        <b>➕ Quick-Add Doctor or Clinical Staff (with optional Login Account)</b>
+        <form id="qDocF" class="form" style="margin-top:8px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+          <label>Full Name *<input name="name" required placeholder="e.g. Dr. Tariq Mahmood"></label>
+          <label>Role *<select name="role">${["Doctor", "Nurse", "Receptionist", "Pharmacist", "Lab Technician", "Accountant", "Admin"].map(r => `<option>${r}</option>`).join("")}</select></label>
+          <label>Department<select name="department_id">${deptOpts}</select></label>
+          <label>Or New Department Name<input name="new_department" placeholder="e.g. Oncology (auto-creates)"></label>
+          <label>Specialization<input name="specialization" placeholder="e.g. Consultant Cardiologist"></label>
+          <label>Consultation Fee (${CURRENCY})<input name="fee" type="number" step="any" min="0" value="1500"></label>
+          <label>Phone<input name="phone" placeholder="+92-300-1234567"></label>
+          <label>Email<input name="email" placeholder="doctor@hospital.pk"></label>
+          <label>Login Username (optional)<input name="username" placeholder="e.g. dr.tariq"></label>
+          <label>Login Password (optional)<input name="password" type="password" autocomplete="new-password" placeholder="Set login password"></label>
+          <div style="grid-column:1/-1;display:flex;justify-content:flex-end"><button class="btn primary sm">＋ Add Doctor / Staff to Hospital</button></div>
+        </form>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t">
+          <tr><th>Name</th><th>Role</th><th>Department</th><th>Specialization</th><th>Fee (${CURRENCY})</th><th>Phone</th><th>Login Account</th><th>Status</th><th>Actions</th></tr>
+          ${m.staff.map(st => `<tr>
+            <td><b>${esc(st.name)}</b></td>
+            <td>${esc(st.role)}</td>
+            <td>${esc(st.department || "—")}</td>
+            <td>${esc(st.specialization || "—")}</td>
+            <td class="num">${money(st.fee || 0)}</td>
+            <td>${esc(st.phone || "—")}</td>
+            <td>${st.login_user ? `<code>${esc(st.login_user)}</code>` : '<span class="muted">—</span>'}</td>
+            <td>${badge(st.status || "Active")}</td>
+            <td>
+              <button class="btn sm" data-medit="staff" data-id="${st.id}">Edit</button>
+              <button class="btn sm danger" data-mdel="staff" data-id="${st.id}">Delete</button>
+            </td>
+          </tr>`).join("")}
+        </table>
+      </div>`;
+      $("#qDocF").onsubmit = async e => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(e.target));
+        try {
+          await api("/settings/doctor-quick-add", { method: "POST", body: fd }).catch(async () => {
+            await api("/r/staff", { method: "POST", body: fd });
+          });
+          toast(`Added ${fd.name}`);
+          renderSettings();
+        } catch (err) { fail(err); }
+      };
+    } else if (_activeMasterTab === "departments") {
+      box.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--line);padding:12px;border-radius:10px;margin-bottom:14px">
+        <b>➕ Add Hospital Department</b>
+        <form id="qDeptF" class="form" style="margin-top:8px;grid-template-columns:1fr 2fr auto;align-items:end">
+          <label>Department Name *<input name="name" required placeholder="e.g. Dermatology, Oncology, ENT"></label>
+          <label>Description<input name="description" placeholder="Outpatient & inpatient clinical services"></label>
+          <button class="btn primary">＋ Add Department</button>
+        </form>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t">
+          <tr><th>Department Name</th><th>Description</th><th>Assigned Staff</th><th>Actions</th></tr>
+          ${m.departments.map(d => `<tr>
+            <td><b>${esc(d.name)}</b></td>
+            <td>${esc(d.description || "—")}</td>
+            <td>${d.staff_count ?? d.doctors ?? 0} staff</td>
+            <td>
+              <button class="btn sm" data-medit="departments" data-id="${d.id}">Edit</button>
+              <button class="btn sm danger" data-mdel="departments" data-id="${d.id}">Delete</button>
+            </td>
+          </tr>`).join("")}
+        </table>
+      </div>`;
+      $("#qDeptF").onsubmit = async e => {
+        e.preventDefault();
+        try {
+          await api("/r/departments", { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
+          toast("Department added");
+          renderSettings();
+        } catch (err) { fail(err); }
+      };
+    } else if (_activeMasterTab === "wards") {
+      box.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--line);padding:12px;border-radius:10px;margin-bottom:14px">
+        <b>➕ Create Ward &amp; Auto-Generate Numbered Beds</b>
+        <form id="qWardF" class="form" style="margin-top:8px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));align-items:end">
+          <label>Ward Name *<input name="name" required placeholder="e.g. Surgical Ward"></label>
+          <label>Ward Type<select name="type">${["General", "Private", "ICU", "Emergency", "Maternity", "Pediatric"].map(t => `<option>${t}</option>`).join("")}</select></label>
+          <label>Daily Rate (${CURRENCY}) *<input name="daily_rate" type="number" step="any" min="0" value="2500" required></label>
+          <label>Bed Code Prefix<input name="bed_prefix" placeholder="e.g. SW"></label>
+          <label>Auto-Create Beds (Count)<input name="bed_count" type="number" min="0" max="100" value="8" required></label>
+          <button class="btn primary">＋ Create Ward &amp; Beds</button>
+        </form>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t">
+          <tr><th>Ward Name</th><th>Type</th><th>Daily Rate (${CURRENCY})</th><th>Total Beds</th><th>Available Beds</th><th>Actions</th></tr>
+          ${m.wards.map(w => `<tr>
+            <td><b>${esc(w.name)}</b></td>
+            <td>${esc(w.type || "General")}</td>
+            <td class="num">${money(w.daily_rate || 0)}</td>
+            <td>${w.total_beds ?? 0}</td>
+            <td>${w.available_beds ?? (w.total_beds - (w.occupied || 0))}</td>
+            <td>
+              <button class="btn sm" data-medit="wards" data-id="${w.id}">Edit</button>
+              <button class="btn sm" onclick="go('beds')">Manage Beds</button>
+              <button class="btn sm danger" data-mdel="wards" data-id="${w.id}">Delete</button>
+            </td>
+          </tr>`).join("")}
+        </table>
+      </div>`;
+      $("#qWardF").onsubmit = async e => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(e.target));
+        try {
+          const r = await api("/settings/ward-with-beds", { method: "POST", body: fd }).catch(async () => {
+            const w = await api("/r/wards", { method: "POST", body: { name: fd.name, type: fd.type, daily_rate: fd.daily_rate } });
+            return { beds_created: 0, ward_id: w.id };
+          });
+          toast(`Created ${fd.name} with ${r.beds_created ?? fd.bed_count} beds`);
+          renderSettings();
+        } catch (err) { fail(err); }
+      };
+    } else if (_activeMasterTab === "labs") {
+      box.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--line);padding:12px;border-radius:10px;margin-bottom:14px">
+        <b>➕ Add Lab / Diagnostic Test to Catalog</b>
+        <form id="qLabF" class="form" style="margin-top:8px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));align-items:end">
+          <label>Test Name *<input name="name" required placeholder="e.g. Dengue NS1 Antigen"></label>
+          <label>Category<select name="category">${["Hematology", "Biochemistry", "Microbiology", "Radiology", "Pathology", "Other"].map(t => `<option>${t}</option>`).join("")}</select></label>
+          <label>Price (${CURRENCY}) *<input name="price" type="number" step="any" min="0" value="800" required></label>
+          <label>Reference Range<input name="reference_range" placeholder="e.g. Negative"></label>
+          <button class="btn primary">＋ Add Lab Test</button>
+        </form>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t">
+          <tr><th>Test Name</th><th>Category</th><th>Price (${CURRENCY})</th><th>Reference Range</th><th>Actions</th></tr>
+          ${m.lab_tests.map(t => `<tr>
+            <td><b>${esc(t.name)}</b></td>
+            <td>${esc(t.category || "—")}</td>
+            <td class="num">${money(t.price || 0)}</td>
+            <td>${esc(t.reference_range || "—")}</td>
+            <td>
+              <button class="btn sm" data-medit="lab_tests" data-id="${t.id}">Edit</button>
+              <button class="btn sm danger" data-mdel="lab_tests" data-id="${t.id}">Delete</button>
+            </td>
+          </tr>`).join("")}
+        </table>
+      </div>`;
+      $("#qLabF").onsubmit = async e => {
+        e.preventDefault();
+        try {
+          await api("/r/lab_tests", { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
+          toast("Lab test added");
+          renderSettings();
+        } catch (err) { fail(err); }
+      };
+    } else if (_activeMasterTab === "medicines") {
+      box.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--line);padding:12px;border-radius:10px;margin-bottom:14px">
+        <b>➕ Add Medicine to Hospital Formulary</b>
+        <form id="qMedF" class="form" style="margin-top:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end">
+          <label>Medicine Name *<input name="name" required placeholder="e.g. Panadol 500mg"></label>
+          <label>Category<input name="category" placeholder="e.g. Analgesic"></label>
+          <label>Initial Stock *<input name="stock" type="number" min="0" value="200" required></label>
+          <label>Reorder Level<input name="reorder_level" type="number" min="0" value="50"></label>
+          <label>Unit Price (${CURRENCY}) *<input name="unit_price" type="number" step="any" min="0" value="5" required></label>
+          <label>Expiry Date<input name="expiry_date" type="date" value="${new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10)}"></label>
+          <label>Supplier<input name="supplier" placeholder="e.g. GSK / Getz Pharma"></label>
+          <button class="btn primary">＋ Add Medicine</button>
+        </form>
+      </div>
+      <div class="tbl-wrap">
+        <table class="t">
+          <tr><th>Medicine</th><th>Category</th><th>Stock</th><th>Reorder At</th><th>Unit Price (${CURRENCY})</th><th>Expiry</th><th>Supplier</th><th>Actions</th></tr>
+          ${m.medicines.map(med => `<tr>
+            <td><b>${esc(med.name)}</b></td>
+            <td>${esc(med.category || "—")}</td>
+            <td>${med.stock}</td>
+            <td>${med.reorder_level ?? 10}</td>
+            <td class="num">${money(med.unit_price || 0)}</td>
+            <td>${esc(med.expiry_date || "—")}</td>
+            <td>${esc(med.supplier || "—")}</td>
+            <td>
+              <button class="btn sm" data-medit="medicines" data-id="${med.id}">Edit</button>
+              <button class="btn sm danger" data-mdel="medicines" data-id="${med.id}">Delete</button>
+            </td>
+          </tr>`).join("")}
+        </table>
+      </div>`;
+      $("#qMedF").onsubmit = async e => {
+        e.preventDefault();
+        try {
+          await api("/r/medicines", { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
+          toast("Medicine added");
+          renderSettings();
+        } catch (err) { fail(err); }
+      };
+    }
+
+    box.querySelectorAll("[data-medit]").forEach(btn => btn.onclick = () => {
+      const res = META.resources.find(r => r.key === btn.dataset.medit);
+      if (res) openForm(res, +btn.dataset.id, () => renderSettings());
+    });
+    box.querySelectorAll("[data-mdel]").forEach(btn => btn.onclick = async () => {
+      if (!confirm("Delete this master data record?")) return;
+      try {
+        await api(`/r/${btn.dataset.mdel}/${btn.dataset.id}`, { method: "DELETE" });
+        toast("Deleted");
+        renderSettings();
+      } catch (err) { fail(err); }
+    });
+  };
+
+  document.querySelectorAll("[data-mtab]").forEach(el => el.onclick = () => {
+    _activeMasterTab = el.dataset.mtab;
+    drawMasterTab();
+  });
+  drawMasterTab();
 }
 
 boot();

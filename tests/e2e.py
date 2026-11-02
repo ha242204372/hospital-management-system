@@ -128,5 +128,38 @@ s, _, _ = call("POST", "/api/db/query", {"sql": "DROP TABLE patients"}, cookie=A
 ok(s == 400, "Database Studio blocks destructive SQL in console")
 s, m_res, _ = call("POST", "/api/medicines/1/restock", {"quantity": 25}, cookie=P)
 ok(s == 200 and m_res["stock"] > 25, "One-click pharmacy restock endpoint")
+
+# Multi-Hospital Setup & Master Data Onboarding endpoints
+s, pub, _ = call("GET", "/api/public-config")
+ok(s == 200 and pub["currency"] == "PKR" and "hospital_name" in pub, "Public hospital branding config endpoint")
+s, st_get, _ = call("GET", "/api/settings", cookie=A)
+ok(s == 200 and len(st_get["presets"]) >= 4 and "master" in st_get, "Hospital Setup & Master Data overview")
+s, st_upd, _ = call(
+    "POST",
+    "/api/settings",
+    {"hospital_name": "Al-Shifa International Hospital", "currency": "PKR", "mrn_prefix": "ASH", "invoice_prefix": "ASH-INV"},
+    cookie=A,
+)
+ok(s == 200 and st_upd["settings"]["hospital_name"] == "Al-Shifa International Hospital", "White-label hospital rebranding update")
+s, new_pt, _ = call("POST", "/api/r/patients", {"name": "Zainab Bibi", "gender": "Female"}, cookie=A)
+s, z_prof, _ = call("GET", f"/api/patients/{new_pt['id']}/profile", cookie=A)
+ok(s == 200 and z_prof["mrn"].startswith("ASH"), "Custom hospital MRN prefix applied to new patients")
+s, q_doc, _ = call(
+    "POST",
+    "/api/settings/doctor-quick-add",
+    {"name": "Dr. Tariq Mahmood", "role": "Doctor", "new_department": "Oncology", "specialization": "Medical Oncologist", "fee": 2000, "username": "dr.tariq", "password": "pw123"},
+    cookie=A,
+)
+ok(s == 200 and login("dr.tariq", "pw123"), "Quick-add Doctor with auto-created department and login account")
+s, w_res, _ = call(
+    "POST",
+    "/api/settings/ward-with-beds",
+    {"name": "Oncology Ward", "type": "Private", "daily_rate": 4500, "bed_prefix": "ONC", "bed_count": 5},
+    cookie=A,
+)
+ok(s == 200 and w_res["beds_created"] == 5, "One-click Ward + Auto-Bed generator")
+s, cs_res, _ = call("POST", "/api/settings/clean-slate", {"hospital_name": "Al-Shifa International Hospital"}, cookie=A)
+s, after_setup, _ = call("GET", "/api/settings", cookie=A)
+ok(s == 200 and after_setup["counts"]["patients"] == 0 and after_setup["counts"]["doctors"] >= 9, "Clean-slate Go-Live mode clears demo patients while keeping master data")
 print("ALL TESTS PASSED")
 

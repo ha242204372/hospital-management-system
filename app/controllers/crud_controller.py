@@ -2,7 +2,7 @@
 import sqlite3
 import datetime as dt
 from app.config import ApiError
-from app.models.db import one, scalar, today, audit, add_charge
+from app.models.db import one, scalar, today, audit, add_charge, get_settings
 from app.models.schema_registry import RES
 from app.controllers.auth_controller import hash_pw
 
@@ -43,7 +43,8 @@ def clean(r, data, creating):
 
 def hook_before_create(conn, res, d, user):
     if res == "patients":
-        d["mrn"] = "MRN%05d" % (scalar(conn, "SELECT MAX(id) FROM patients") + 1)
+        pfx = (get_settings(conn).get("mrn_prefix") or "MRN").strip()
+        d["mrn"] = "%s%05d" % (pfx, scalar(conn, "SELECT MAX(id) FROM patients") + 1)
     elif res == "admissions":
         b = one(conn, "SELECT status FROM beds WHERE id=?", (d["bed_id"],))
         if not b or b["status"] != "Available":
@@ -62,7 +63,8 @@ def hook_before_create(conn, res, d, user):
         d["date"] = d.get("date") or today()
     elif res == "invoices":
         n = scalar(conn, "SELECT MAX(id) FROM invoices") + 1
-        d["number"] = f"INV-{n:05d}"
+        pfx = (get_settings(conn).get("invoice_prefix") or "INV").strip().rstrip("-")
+        d["number"] = f"{pfx}-{n:05d}"
         d["date"] = d.get("date") or today()
     elif res == "users":
         pw = d.pop("password", "")

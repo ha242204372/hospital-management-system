@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MediCare HMS</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
 <div id="login" class="login hidden">
   <form id="loginForm" class="login-card">
-    <div class="logo">✚</div>
-    <h1>MediCare HMS</h1>
-    <p class="muted">Hospital Management System</p>
+    <div class="logo" id="loginLogo">✚</div>
+    <h1 id="loginHospitalName">MediCare General Hospital</h1>
+    <p class="muted" id="loginTagline">Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing</p>
     <label>Username<input name="username" autocomplete="username" required autofocus></label>
     <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
     <div id="loginErr" class="err"></div>
@@ -38,6 +38,7 @@
       <button id="menuBtn" class="btn ghost menu">☰</button>
       <h2 id="pageTitle"></h2>
       <div class="spacer"></div>
+      <button id="topSetupBtn" class="btn primary sm" onclick="go('settings')" title="Configure Hospital Name, Doctors & Master Data">⚙️ Hospital Setup</button>
       <select id="themeSelect" class="theme-pick" title="Switch Application Theme">
         <option value="indigo">🎨 Royal Indigo (Default)</option>
         <option value="emerald">🌿 Emerald Forest</option>
@@ -55,7 +56,7 @@
 
 <div id="modal" class="modal hidden"><div class="modal-box"><div class="modal-head"><h3 id="mTitle"></h3><button class="btn ghost" id="mClose">✕</button></div><div id="mBody" class="modal-body"></div></div></div>
 <div id="toast" class="toast"></div>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=3"></script>
 </body>
 </html>
 

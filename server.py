@@ -41,7 +41,7 @@ from app.config import (
     ApiError,
 )
 import app.models.db as db_mod
-from app.models.db import connect, rows, one, today, audit, recompute
+from app.models.db import connect, rows, one, today, audit, recompute, get_settings
 from app.models.schema_registry import RES, REFS
 from app.models.seed import seed, init_db as _init_db
 from app.controllers.auth_controller import SESSIONS, current_user, handle_login, handle_logout
@@ -49,6 +49,14 @@ from app.controllers.crud_controller import get_res, create, update, delete, dis
 from app.controllers.analytics_controller import invoice_detail, patient_profile, dashboard, reports
 from app.controllers.ai_controller import handle_ai_route
 from app.controllers.db_controller import get_db_info, run_sql_query, reset_demo_db
+from app.controllers.settings_controller import (
+    get_public_config,
+    get_hospital_setup,
+    update_hospital_settings,
+    quick_add_doctor,
+    create_ward_with_beds,
+    clean_slate_for_new_hospital,
+)
 
 # Default database location inside `database/hospital.db` (overridable for tests)
 DB = DB_PATH
@@ -162,7 +170,9 @@ class Handler(BaseHTTPRequestHandler):
             conn.close()
 
     def api(self, conn, method, path, qs):
-        # 1. Auth Controller routes
+        # 1. Public & Auth Controller routes
+        if path == "/api/public-config" and method == "GET":
+            return get_public_config(conn)
         if path == "/api/login" and method == "POST":
             return handle_login(conn, self.body())
         if path == "/api/logout":
@@ -175,17 +185,27 @@ class Handler(BaseHTTPRequestHandler):
 
         # 2. Metadata route
         if path == "/api/meta":
+            settings = get_settings(conn)
+            cur_code = settings.get("currency") or "PKR"
             res = []
             for k, r in RES.items():
                 if role in r["read"]:
+                    fields = [
+                        {**f, "label": f["label"].replace("(PKR)", f"({cur_code})")}
+                        for f in r["fields"]
+                    ]
+                    columns = [
+                        (c[0], c[1].replace("(PKR)", f"({cur_code})"))
+                        for c in r["columns"]
+                    ]
                     res.append(
                         dict(
                             key=k,
                             label=r["label"],
                             icon=r["icon"],
                             group=r["group"],
-                            fields=r["fields"],
-                            columns=r["columns"],
+                            fields=fields,
+                            columns=columns,
                             canWrite=role in r["write"],
                             canDelete=role in r["delete"],
                             noEdit=bool(r.get("no_edit")),
@@ -198,12 +218,25 @@ class Handler(BaseHTTPRequestHandler):
                     )
             return {
                 "user": user,
-                "hospital": HOSPITAL_NAME,
+                "hospital": settings.get("hospital_name") or HOSPITAL_NAME,
+                "settings": settings,
                 "resources": res,
                 "dashboard": role in ROLES,
                 "reports": role in ("Admin", "Accountant"),
                 "ai": gemini_ai.get_status(),
             }
+
+        # 2b. Hospital Setup & Master Data routes
+        if path == "/api/settings" and method == "GET":
+            return get_hospital_setup(conn, user)
+        if path == "/api/settings" and method == "POST":
+            return update_hospital_settings(conn, user, self.body())
+        if path == "/api/settings/doctor-quick-add" and method == "POST":
+            return quick_add_doctor(conn, user, self.body())
+        if path == "/api/settings/ward-with-beds" and method == "POST":
+            return create_ward_with_beds(conn, user, self.body())
+        if path == "/api/settings/clean-slate" and method == "POST":
+            return clean_slate_for_new_hospital(conn, user, self.body())
 
         # 3. Gemini AI Hub Controller routes
         if path.startswith("/api/ai/"):
@@ -267,7 +300,9 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             if m.group(1) not in REFS:
                 raise ApiError(404, "Unknown option set")
-            opts = rows(conn, REFS[m.group(1)])
+            cur_code = (get_settings(conn).get("currency") or "PKR").replace("'", "")
+            sql_ref = REFS[m.group(1)].replace("PKR ", f"{cur_code} ")
+            opts = rows(conn, sql_ref)
             if m.group(1) == "patients" and role == "Patient" and user.get("patient_id"):
                 opts = [o for o in opts if o["id"] == user["patient_id"]]
             return opts

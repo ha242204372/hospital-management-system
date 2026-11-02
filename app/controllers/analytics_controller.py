@@ -1,7 +1,7 @@
 """Analytics & profile controller: Dashboard KPIs, 30-day Reports, Patient Profile, and Invoice Detail."""
 import datetime as dt
 from app.config import ApiError, HOSPITAL_NAME
-from app.models.db import rows, one, scalar, today
+from app.models.db import rows, one, scalar, today, get_settings
 
 
 def invoice_detail(conn, id_):
@@ -12,9 +12,11 @@ def invoice_detail(conn, id_):
     )
     if not inv:
         raise ApiError(404, "Invoice not found")
+    s = get_settings(conn)
     inv["items"] = rows(conn, "SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY id", (id_,))
     inv["payments"] = rows(conn, "SELECT * FROM payments WHERE invoice_id=? ORDER BY id", (id_,))
-    inv["hospital"] = HOSPITAL_NAME
+    inv["hospital"] = s.get("hospital_name") or HOSPITAL_NAME
+    inv["hospital_info"] = s
     return inv
 
 

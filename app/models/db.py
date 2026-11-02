@@ -42,7 +42,46 @@ CREATE TABLE IF NOT EXISTS invoice_items(id INTEGER PRIMARY KEY, invoice_id INTE
 CREATE TABLE IF NOT EXISTS payments(id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
   amount REAL NOT NULL, method TEXT, date TEXT);
 CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, at TEXT DEFAULT (datetime('now')), user TEXT, action TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 """
+
+DEFAULT_SETTINGS = {
+    "hospital_name": "MediCare General Hospital",
+    "tagline": "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing",
+    "logo_icon": "✚",
+    "currency": "PKR",
+    "address": "Main Boulevard, Gulberg III, Lahore, Pakistan",
+    "phone": "+92-42-111-222-333",
+    "emergency_phone": "1122 / +92-42-111-911-911",
+    "email": "info@medicare-hospital.pk",
+    "website": "www.medicare-hospital.pk",
+    "tax_id": "NTN-8492015-7",
+    "mrn_prefix": "MRN",
+    "invoice_prefix": "INV",
+    "invoice_footer": "Thank you for choosing our hospital. Wishing you good health.",
+    "default_theme": "indigo",
+}
+
+
+def get_settings(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+    stored = {r["key"]: r["value"] for r in rows(conn, "SELECT key, value FROM settings")}
+    out = dict(DEFAULT_SETTINGS)
+    for k, v in stored.items():
+        if v is not None and v != "":
+            out[k] = v
+    return out
+
+
+def save_settings(conn, data):
+    conn.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+    for k in DEFAULT_SETTINGS:
+        if k in data and data[k] is not None:
+            conn.execute(
+                "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (k, str(data[k]).strip()),
+            )
+    return get_settings(conn)
 
 
 def today():
@@ -86,9 +125,10 @@ def recompute(conn, inv_id):
 
 def new_invoice(conn, patient_id, date=None, notes=None):
     n = scalar(conn, "SELECT MAX(id) FROM invoices") + 1
+    pfx = (get_settings(conn).get("invoice_prefix") or "INV").strip().rstrip("-")
     cur = conn.execute(
         "INSERT INTO invoices(number,patient_id,date,notes) VALUES(?,?,?,?)",
-        (f"INV-{n:05d}", patient_id, date or today(), notes),
+        (f"{pfx}-{n:05d}", patient_id, date or today(), notes),
     )
     return cur.lastrowid
 
