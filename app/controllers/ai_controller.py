@@ -1,7 +1,8 @@
-"""Gemini AI Hub controller: Symptom Triage, SOAP Copilot, Longitudinal EMR Summary, Rx Safety, and Executive Briefing."""
+"""Gemini AI Hub controller: Symptom Triage, SOAP Copilot, Longitudinal EMR Summary, Rx Safety, Executive Briefing, and ML Lab Test Predictor."""
 import gemini_ai
 from app.config import ApiError
 from app.models.db import one, rows, audit
+from app.models.ml_lab_predictor import get_model_stats, predict_lab_tests
 from app.controllers.analytics_controller import patient_profile, dashboard
 
 
@@ -9,6 +10,29 @@ def handle_ai_route(conn, method, path, user, body_fn):
     role = user["role"]
     if path == "/api/ai/status" and method == "GET":
         return gemini_ai.get_status()
+
+    if path == "/api/ai/ml-lab/stats" and method == "GET":
+        return get_model_stats(conn, force_retrain=False)
+
+    if path == "/api/ai/ml-lab/train" and method == "POST":
+        stats = get_model_stats(conn, force_retrain=True)
+        audit(conn, user, "ml_lab_train", f"samples={stats['dataset_summary']['total_samples']} acc={stats['champion_metrics']['accuracy']}%")
+        return stats
+
+    if path == "/api/ai/ml-lab/predict" and method == "POST":
+        b = body_fn()
+        if not (b.get("symptoms") or "").strip():
+            raise ApiError(400, "Please enter clinical symptoms or findings to predict lab tests")
+        res = predict_lab_tests(
+            conn,
+            symptoms=b["symptoms"],
+            age=b.get("age"),
+            gender=b.get("gender") or "Male",
+            vitals=b.get("vitals"),
+            top_k=int(b.get("top_k") or 5),
+        )
+        audit(conn, user, "ml_lab_predict", f"top={res.get('primary_detected_test')}")
+        return res
 
     if path == "/api/ai/config" and method == "POST":
         if role not in ("Admin", "Doctor"):
@@ -29,6 +53,14 @@ def handle_ai_route(conn, method, path, user, body_fn):
                 gender=b.get("gender"),
                 vitals=b.get("vitals"),
                 model=b.get("model"),
+            )
+            out["ml_lab_detection"] = predict_lab_tests(
+                conn,
+                symptoms=b["symptoms"],
+                age=b.get("age"),
+                gender=b.get("gender") or "Male",
+                vitals=b.get("vitals"),
+                top_k=4,
             )
             audit(conn, user, "ai_triage", b["symptoms"][:80])
             return out
