@@ -423,12 +423,25 @@ class ReusableHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
 
+def _get_lan_ip():
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
 def start_server(port):
     import subprocess
     import signal
     import time
+    host = os.environ.get("HOST", "0.0.0.0")
     try:
-        httpd = ReusableHTTPServer(("127.0.0.1", port), Handler)
+        httpd = ReusableHTTPServer((host, port), Handler)
     except OSError:
         try:
             out = subprocess.check_output(["/usr/sbin/lsof", "-ti", f"tcp:{port}"], text=True)
@@ -439,9 +452,12 @@ def start_server(port):
             time.sleep(0.4)
         except Exception:
             pass
-        httpd = ReusableHTTPServer(("127.0.0.1", port), Handler)
-    print(f"{HOSPITAL_NAME} HMS (MVC) running on http://localhost:{port}")
-    print(f"Database file: {DB}")
+        httpd = ReusableHTTPServer((host, port), Handler)
+    lan_ip = _get_lan_ip()
+    print(f"{HOSPITAL_NAME} HMS (MVC) running on:")
+    print(f"  • This computer:   http://localhost:{port}")
+    print(f"  • Same Wi-Fi/LAN:  http://{lan_ip}:{port}")
+    print(f"  • Database file:   {DB}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

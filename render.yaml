@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: medicare-hms
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: HOST
+        value: 0.0.0.0
