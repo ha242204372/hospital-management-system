@@ -124,8 +124,10 @@ def create(conn, key, data, user):
     data = dict(data)
     if key == "admissions" and not data.get("admit_date"):
         data["admit_date"] = today()
-    if key == "encounters" and not data.get("date"):
+    if key in ("encounters", "appointments", "dispensing", "invoices") and not data.get("date"):
         data["date"] = today()
+    if key == "lab_orders" and not data.get("ordered_at"):
+        data["ordered_at"] = today()
     d = clean(r, data, True)
     hook_before_create(conn, key, d, user)
     cols = list(d.keys())

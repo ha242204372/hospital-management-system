@@ -89,12 +89,15 @@ async function boot() {
   if (META.settings) applyBranding(META.settings);
   $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
   const u = META.user; $("#uName").textContent = u.full_name; $("#uRole").textContent = u.role; $("#avatar").textContent = u.full_name.replace(/^Dr\.\s*/, "")[0];
+  if ($("#topSetupBtn")) $("#topSetupBtn").style.display = u.role === "Admin" ? "" : "none";
   const logo = META.settings?.logo_icon || "✚";
   const groups = {};
   META.resources.forEach(r => (groups[r.group] ||= []).push(r));
   let h = `<div class="brand"><div class="logo">${esc(logo)}</div>${esc(META.hospital)}</div>`;
   h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
-  h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup &amp; Master Data</div>`;
+  if (META.user.role === "Admin") {
+    h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup &amp; Master Data</div>`;
+  }
   h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
   if (META.user.role === "Admin") {
@@ -270,6 +273,9 @@ async function renderTable(res) {
       if (res.key === "medicines" && res.canWrite) {
         a += `<button class="btn sm primary" data-a="restock" data-id="${r.id}" data-name="${esc(r.name)}">＋ Restock</button> `;
       }
+      if (res.key === "encounters") {
+        a += `<button class="btn sm primary" data-a="print-rx" data-id="${r.id}">🖨 Print Rx</button> `;
+      }
       (res.actions || []).forEach(x => { if (Object.entries(x.when || {}).every(([k, v]) => r[k] === v)) a += `<button class="btn sm primary" data-a="${x.key}" data-id="${r.id}">${x.label}</button> `; });
       if (res.canWrite && res.fields.length && !res.noEdit && !locked) a += `<button class="btn sm" data-a="edit" data-id="${r.id}">Edit</button> `;
       if (res.canDelete) a += `<button class="btn sm danger" data-a="del" data-id="${r.id}">Delete</button>`;
@@ -357,6 +363,13 @@ async function renderTable(res) {
           toast(`Restocked ${m.name} — new stock: ${m.stock}`); load();
         }
       }
+      else if (a === "print-rx") {
+        const rec = data.find(x => x.id === id) || (await api(`/record/encounters/${id}`));
+        const hi = META.settings || {};
+        const w = window.open("", "_blank", "width=760,height=860");
+        w.document.write(`<title>Prescription - ${esc(rec.patient || "")}</title><body style="font-family:sans-serif;max-width:680px;margin:30px auto;color:#111"><div style="border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px"><h1 style="margin:0">${esc(hi.logo_icon || "✚")} ${esc(META.hospital)}</h1><div style="color:#555;font-size:13px">${esc(hi.address || "")} · Tel: ${esc(hi.phone || "")}</div></div><div style="display:flex;justify-content:space-between;margin-bottom:14px"><div><b>Patient:</b> ${esc(rec.patient || "")}<br><b>Consulting Doctor:</b> ${esc(rec.doctor || "")}</div><div style="text-align:right"><b>Date:</b> ${esc(rec.date || "")}<br><b>Vitals:</b> BP ${esc(rec.bp || "—")}, Temp ${esc(rec.temperature || "—")}°C, Pulse ${esc(rec.pulse || "—")} bpm</div></div><div style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:8px;margin-bottom:14px"><b>Diagnosis:</b> ${esc(rec.diagnosis || "—")}<br><div style="margin-top:6px;white-space:pre-wrap"><b>Clinical Notes:</b> ${esc(rec.notes || "—")}</div></div><h3 style="margin-bottom:6px">℞ Prescription</h3><pre style="font-family:inherit;white-space:pre-wrap;background:#fff;border:1px solid #cbd5e1;padding:14px;border-radius:8px;min-height:120px">${esc(rec.prescription || "As advised")}</pre><p style="margin-top:40px;color:#666;font-size:12px;border-top:1px solid #ddd;padding-top:10px">${esc(hi.invoice_footer || "Wishing you a speedy recovery.")}</p></body>`);
+        w.document.close(); w.print();
+      }
     } catch (err) { fail(err); }
   };
 }
@@ -423,7 +436,10 @@ async function openProfile(id) {
       ${canW("lab_orders") ? `<button class="btn sm" data-pact="lab_orders">🔬 + Lab Order</button>` : ""}
       ${canW("dispensing") ? `<button class="btn sm" data-pact="dispensing">💊 + Dispense</button>` : ""}
     </div>
-    <button class="btn primary sm" id="aiProfSumBtn">✨ Generate Gemini EMR Summary</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn primary sm" id="aiProfSumBtn">✨ Generate Gemini EMR Summary</button>
+      <button class="btn sm" id="printChartBtn">🖨 Print Clinical Chart</button>
+    </div>
   </div>
   <div id="aiProfSumBox" class="hidden card" style="margin-bottom:12px;background:#fafdff;white-space:pre-wrap;font-size:13px"></div>
   <div class="kv">${[["Gender", p.gender], ["Date of birth", p.dob], ["Blood group", p.blood_group], ["Phone", p.phone], ["Email", p.email], ["Allergies", p.allergies || "None recorded"], ["Address", p.address], ["Emergency", [p.emergency_contact, p.emergency_phone].filter(Boolean).join(" · ")], ["Registered", p.created_at]].map(([k, v]) => `<div><span>${k}</span>${esc(v || "—")}</div>`).join("")}</div>
@@ -432,7 +448,7 @@ async function openProfile(id) {
   ${sec("Appointments", [["date", "Date"], ["time", "Time"], ["doctor", "Doctor"], ["reason", "Reason"], ["status", "Status", badge]], p.appointments)}
   ${sec("Lab results", [["ordered_at", "Date"], ["test", "Test"], ["status", "Status", badge], ["result", "Result"], ["reference_range", "Reference"]], p.labs)}
   ${sec("Medicines dispensed", [["date", "Date"], ["medicine", "Medicine"], ["quantity", "Qty"]], p.medicines)}
-  ${sec("Invoices", [["number", "Invoice"], ["date", "Date"], ["total", "Total (PKR)", money], ["paid", "Paid (PKR)", money], ["status", "Status", badge]], p.invoices)}`, true);
+  ${sec("Invoices", [["number", "Invoice"], ["date", "Date"], ["total", `Total (${CURRENCY})`, money], ["paid", `Paid (${CURRENCY})`, money], ["status", "Status", badge]], p.invoices)}`, true);
   document.querySelectorAll("[data-pact]").forEach(btn => btn.onclick = async () => {
     const res = META.resources.find(r => r.key === btn.dataset.pact);
     if (!res) return;
@@ -440,6 +456,12 @@ async function openProfile(id) {
     const sel = $("#rf [name='patient_id']");
     if (sel) sel.value = String(id);
   });
+  $("#printChartBtn").onclick = () => {
+    const hi = META.settings || {};
+    const w = window.open("", "_blank", "width=820,height=920");
+    w.document.write(`<title>Chart - ${esc(p.name)} (${esc(p.mrn)})</title><body style="font-family:sans-serif;max-width:740px;margin:30px auto"><div style="border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px"><h1 style="margin:0">${esc(hi.logo_icon || "✚")} ${esc(META.hospital)}</h1><div style="color:#555;font-size:13px">${esc(hi.address || "")} · Tel: ${esc(hi.phone || "")}</div></div><h2>Patient 360° Medical Chart — ${esc(p.name)} (${esc(p.mrn)})</h2><p><b>Gender:</b> ${esc(p.gender || "—")} · <b>DOB:</b> ${esc(p.dob || "—")} · <b>Blood Group:</b> ${esc(p.blood_group || "—")} · <b>Allergies:</b> ${esc(p.allergies || "None")}<br><b>Phone:</b> ${esc(p.phone || "—")} · <b>Address:</b> ${esc(p.address || "—")}</p><h3>Consultations (${p.encounters.length})</h3><ul>${p.encounters.map(e => `<li><b>${esc(e.date)}</b> (${esc(e.doctor)}): ${esc(e.diagnosis)} — Rx: ${esc(e.prescription || "—")}</li>`).join("") || "<li>None</li>"}</ul><h3>Admissions (${p.admissions.length})</h3><ul>${p.admissions.map(a => `<li><b>${esc(a.admit_date)}</b> to ${esc(a.discharge_date || "Present")} — ${esc(a.ward)} Bed ${esc(a.bed_no)} (${esc(a.diagnosis)}) [${esc(a.status)}]</li>`).join("") || "<li>None</li>"}</ul><h3>Lab Orders (${p.labs.length})</h3><ul>${p.labs.map(l => `<li><b>${esc(l.ordered_at)}</b> — ${esc(l.test)}: ${esc(l.result || l.status)}</li>`).join("") || "<li>None</li>"}</ul></body>`);
+    w.document.close(); w.print();
+  };
   $("#aiProfSumBtn").onclick = async () => {
     const b = $("#aiProfSumBtn"), box = $("#aiProfSumBox");
     b.disabled = true; b.textContent = "✨ Synthesizing…";

@@ -147,6 +147,8 @@ def call_gemini_interaction(prompt, system_instruction=None, response_schema=Non
         }
     except ImportError:
         pass
+    except Exception:
+        return None
 
     # 2. Zero-dependency REST fallback to `/v1beta/interactions`
     payload = {
@@ -172,15 +174,12 @@ def call_gemini_interaction(prompt, system_instruction=None, response_schema=Non
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             text = body.get("output_text") or _extract_steps_text(body.get("steps", []))
             return {"id": body.get("id"), "text": text, "model": use_model, "live": True}
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini API error ({e.code}): {err_body[:240]}")
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Gemini network error: {e.reason}")
+    except Exception:
+        return None
 
 
 def _extract_steps_text(steps):
