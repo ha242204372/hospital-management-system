@@ -534,7 +534,8 @@ function localAiTriage(fd) {
     ],
     interventions = ["Record full baseline vitals (BP, Temp, Pulse, RR, SpO2)", "Tepid sponging if Temp > 38.5°C and initiate oral hydration"];
 
-  if (["chest", "pressure", "angina", "palpitation", "radiating", "syncope", "heart", "cardiac"].some(k => s.includes(k))) {
+  const sNoHb = s.replace(/heart\s*burn/g, "acid reflux");
+  if (["chest", "pressure", "angina", "palpitation", "radiating", "syncope", "cardiac", "heart attack"].some(k => sNoHb.includes(k))) {
     dept = "Cardiology"; urg = "Emergency"; esi = 2;
     conds = ["Acute Coronary Syndrome (ACS / MI — rule out)", "Unstable Angina", "Cardiac Arrhythmia"];
     flags = ["Diaphoresis, crushing substernal pain, hypotension, or SpO2 < 92% require immediate resuscitation bay"];
@@ -547,6 +548,23 @@ function localAiTriage(fd) {
       "Oxygen therapy 2–4 L/min via nasal cannula if SpO2 < 94%",
     ];
     interventions = ["Continuous 12-lead cardiac monitoring & pulse oximetry", "Establish 2 large-bore IV lines (18G)", "Keep defibrillator/crash cart at bedside"];
+  } else if (["abdom", "stomach", "heart burn", "heartburn", "acid", "indigestion", "ulcer", "vomit", "diarrhea", "gastritis", "epigastric", "nausea", "food poison", "appendic", "colic"].some(k => s.includes(k))) {
+    dept = "General Medicine / Emergency"; urg = "Urgent"; esi = 3;
+    conds = [
+      "Acute Gastritis / Severe Gastroesophageal Reflux (GERD / Dyspepsia)",
+      "Peptic Ulcer Disease / Acute Biliary Colic",
+      "Inferior Wall Myocardial Ischemia (rule out via ECG in epigastric pain age ≥ 40)",
+    ];
+    flags = ["Hematemesis (vomiting blood), black tarry stools (melena), peritoneal rigidity, or pain radiating to jaw/left arm"];
+    labs = ["12-Lead ECG (STAT — mandatory to rule out inferior MI in epigastric pain)", "Complete Blood Count", "Liver Function Test & Serum Amylase/Lipase", "H. pylori Stool Antigen / Ultrasound Abdomen"];
+    meds = [
+      "Inj Omeprazole 40mg IV STAT (or Inj Pantoprazole 40mg IV STAT — Proton Pump Inhibitor)",
+      "Syp Antacid + Oxetacaine (Mucaine / Gaviscon Gel) 10–15mL PO STAT for immediate heartburn & epigastric relief",
+      "Inj Famotidine 20mg IV STAT (H2-receptor antagonist)",
+      "Inj Ondansetron 4mg IV STAT (if nausea/vomiting) + Inj Hyoscine Butylbromide (Buscopan) 20mg IV PRN stomach spasm",
+      "AVOID NSAIDs (Ibuprofen, Ketorolac, Diclofenac, Aspirin) as they worsen gastritis/peptic ulceration",
+    ];
+    interventions = ["Obtain 12-Lead ECG first in patients ≥ 40 yrs with upper stomach/epigastric pain", "Elevate head of bed 30–45°", "IV 0.9% Normal Saline 500mL if dehydrated or unable to tolerate oral fluids"];
   } else if (["shortness", "breath", "asthma", "wheez", "copd", "dyspnea", "choking", "spo2", "pneumonia"].some(k => s.includes(k))) {
     dept = "Emergency"; urg = "Emergency"; esi = 2;
     conds = ["Acute Severe Bronchospasm / Asthma Exacerbation", "Acute COPD Exacerbation", "Community-Acquired Pneumonia"];
@@ -658,6 +676,10 @@ function localAiCopilot(fd) {
     diag = "Type 2 Diabetes Mellitus"; icd = "E11.9";
     rx = "1. Tab Metformin 500mg BD with meals x 30 days\n2. Diabetic diet & 30 min brisk walk daily";
     labs = ["HbA1c", "Blood Glucose (Fasting)", "Kidney Function Test"];
+  } else if (["stomach", "abdom", "heart burn", "heartburn", "acid", "gastritis", "epigastric", "ulcer", "indigestion"].some(k => b.includes(k))) {
+    diag = "Acute Gastritis & Gastroesophageal Reflux Disease (GERD)"; icd = "K29.70";
+    rx = "1. Inj Omeprazole 40mg IV STAT, then Cap Omeprazole 20mg BD before meals x 14 days\n2. Syp Antacid + Oxetacaine (Mucaine Gel) 10mL TID after meals & HS\n3. Tab Domperidone 10mg TID before meals x 5 days\n4. Avoid spicy/oily food, caffeine, late-night meals, and NSAIDs";
+    labs = ["12-Lead ECG (rule out inferior MI)", "H. pylori Stool Antigen", "Liver Function Test", "Complete Blood Count"];
   } else if (b.includes("cough") || b.includes("fever") || b.includes("throat") || b.includes("bronchitis")) {
     diag = "Acute Upper Respiratory Infection / Bronchitis"; icd = "J06.9";
     rx = "1. Tab Paracetamol 500mg TID PRN fever\n2. Cap Amoxicillin 500mg TID x 5 days\n3. Tab Cetirizine 10mg HS x 5 days\n4. Warm saline gargles & steam inhalation";
@@ -868,9 +890,8 @@ async function renderGeminiHub() {
     const fd = Object.fromEntries(new FormData(e.target));
     try {
       const localFallback = localAiTriage(fd);
-      const r = await api("/ai/triage", { method: "POST", body: fd }).catch(() => localFallback);
-      if (!r.emergency_medications || !r.emergency_medications.length) r.emergency_medications = localFallback.emergency_medications;
-      if (!r.immediate_interventions || !r.immediate_interventions.length) r.immediate_interventions = localFallback.immediate_interventions;
+      let r = await api("/ai/triage", { method: "POST", body: fd }).catch(() => localFallback);
+      if (!r.emergency_medications || !r.emergency_medications.length) r = localFallback;
       const uBadge = r.urgency === "Emergency" ? "b-bad" : r.urgency === "Urgent" ? "b-warn" : "b-ok";
       out.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
         <span><span class="badge ${uBadge}">${esc(r.urgency)} · ESI-${esc(r.esi_level)}</span> &nbsp; <b>Dept:</b> ${esc(r.recommended_department)}</span>

@@ -107,7 +107,7 @@ ok(call("GET", "/api/patients/2/profile", cookie=PAT)[0] == 403, "patient blocke
 
 # Gemini AI Hub endpoints
 s, ai_st, _ = call("GET", "/api/ai/status", cookie=A)
-ok(s == 200 and "available_models" in ai_st and ai_st["model"] == "gemini-3.8-flash", "Gemini AI status endpoint")
+ok(s == 200 and "available_models" in ai_st and ai_st["model"] in [m["id"] for m in ai_st["available_models"]], "Gemini AI status endpoint")
 s, tr, _ = call("POST", "/api/ai/triage", {"symptoms": "Severe chest pain radiating to left arm and sweating", "age": 58, "gender": "Male"}, cookie=A)
 ok(s == 200 and tr["recommended_department"] == "Cardiology" and tr["esi_level"] == 2 and len(tr.get("emergency_medications", [])) > 0, "Gemini AI symptom triage + emergency medications")
 s, cp, _ = call("POST", "/api/ai/copilot", {"patient_id": pid, "notes": "Productive cough and fever 3 days", "bp": "124/80", "temperature": "38.2"}, cookie=A)

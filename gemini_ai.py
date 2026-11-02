@@ -245,7 +245,8 @@ def ai_triage(symptoms, age=None, gender=None, vitals=None, model=None):
 
     # Deterministic clinical triage & emergency medication fallback
     s = (symptoms or "").lower()
-    if any(k in s for k in ("chest", "pressure", "angina", "palpitation", "radiating", "syncope", "heart", "cardiac")):
+    s_no_hb = s.replace("heart burn", "acid reflux").replace("heartburn", "acid reflux")
+    if any(k in s_no_hb for k in ("chest", "pressure", "angina", "palpitation", "radiating", "syncope", "cardiac", "heart attack")):
         dept, urg, esi = "Cardiology", "Emergency", 2
         conds = ["Acute Coronary Syndrome (ACS / MI — rule out)", "Unstable Angina", "Cardiac Arrhythmia"]
         flags = ["Diaphoresis, crushing substernal pain, hypotension, or SpO2 < 92% require immediate resuscitation bay"]
@@ -258,6 +259,23 @@ def ai_triage(symptoms, age=None, gender=None, vitals=None, model=None):
             "Oxygen therapy 2–4 L/min via nasal cannula if SpO2 < 94%",
         ]
         interventions = ["Continuous 12-lead cardiac monitoring & pulse oximetry", "Establish 2 large-bore IV lines (18G)", "Keep defibrillator/crash cart at bedside"]
+    elif any(k in s for k in ("abdom", "stomach", "heart burn", "heartburn", "acid", "indigestion", "ulcer", "vomit", "diarrhea", "gastritis", "epigastric", "nausea", "food poison", "appendic", "colic")):
+        dept, urg, esi = "General Medicine / Emergency", "Urgent", 3
+        conds = [
+            "Acute Gastritis / Severe Gastroesophageal Reflux (GERD / Dyspepsia)",
+            "Peptic Ulcer Disease / Acute Biliary Colic",
+            "Inferior Wall Myocardial Ischemia (rule out via ECG in epigastric pain age ≥ 40)",
+        ]
+        flags = ["Hematemesis (vomiting blood), black tarry stools (melena), peritoneal rigidity, or pain radiating to jaw/left arm"]
+        labs = ["12-Lead ECG (STAT — mandatory to rule out inferior MI in epigastric pain)", "Complete Blood Count", "Liver Function Test & Serum Amylase/Lipase", "H. pylori Stool Antigen / Ultrasound Abdomen"]
+        meds = [
+            "Inj Omeprazole 40mg IV STAT (or Inj Pantoprazole 40mg IV STAT — Proton Pump Inhibitor)",
+            "Syp Antacid + Oxetacaine (Mucaine / Gaviscon Gel) 10–15mL PO STAT for immediate heartburn & epigastric relief",
+            "Inj Famotidine 20mg IV STAT (H2-receptor antagonist)",
+            "Inj Ondansetron 4mg IV STAT (if nausea/vomiting) + Inj Hyoscine Butylbromide (Buscopan) 20mg IV PRN stomach spasm",
+            "AVOID NSAIDs (Ibuprofen, Ketorolac, Diclofenac, Aspirin) as they worsen gastritis/peptic ulceration",
+        ]
+        interventions = ["Obtain 12-Lead ECG first in patients ≥ 40 yrs with upper stomach/epigastric pain", "Elevate head of bed 30–45°", "IV 0.9% Normal Saline 500mL if dehydrated or unable to tolerate oral fluids"]
     elif any(k in s for k in ("shortness", "breath", "asthma", "wheez", "copd", "dyspnea", "choking", "spo2", "cough", "pneumonia")):
         dept, urg, esi = "Emergency", "Emergency", 2
         conds = ["Acute Severe Bronchospasm / Asthma Exacerbation", "Acute COPD Exacerbation", "Community-Acquired Pneumonia"]
