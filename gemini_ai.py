@@ -206,9 +206,21 @@ TRIAGE_SCHEMA = {
         "possible_conditions": {"type": "array", "items": {"type": "string"}},
         "red_flags": {"type": "array", "items": {"type": "string"}},
         "recommended_vitals_and_labs": {"type": "array", "items": {"type": "string"}},
+        "emergency_medications": {"type": "array", "items": {"type": "string"}},
+        "immediate_interventions": {"type": "array", "items": {"type": "string"}},
         "triage_notes": {"type": "string"},
     },
-    "required": ["urgency", "esi_level", "recommended_department", "possible_conditions", "red_flags", "recommended_vitals_and_labs", "triage_notes"],
+    "required": [
+        "urgency",
+        "esi_level",
+        "recommended_department",
+        "possible_conditions",
+        "red_flags",
+        "recommended_vitals_and_labs",
+        "emergency_medications",
+        "immediate_interventions",
+        "triage_notes",
+    ],
 }
 
 
@@ -216,7 +228,10 @@ def ai_triage(symptoms, age=None, gender=None, vitals=None, model=None):
     sys_inst = (
         "You are an expert Emergency Department triage clinician at MediCare General Hospital. "
         "Given patient symptoms, demographics, and optional vitals, return a structured JSON triage assessment "
-        "mapping to hospital departments: Cardiology, Neurology, Orthopedics, Pediatrics, Gynecology, General Medicine, Emergency, or Radiology."
+        "mapping to hospital departments: Cardiology, Neurology, Orthopedics, Pediatrics, Gynecology, General Medicine, Emergency, or Radiology. "
+        "Always include `emergency_medications` (stat/first-line emergency treatment medicines with dose and route, e.g., Chewable Aspirin 300mg PO stat, "
+        "Sublingual Nitroglycerin 0.4mg, Nebulized Salbutamol 5mg, Inj Paracetamol 1g IV, Inj Ondansetron 4mg IV, Inj Ceftriaxone 1g IV, IV Normal Saline 0.9%) "
+        "and `immediate_interventions` (bedside stabilization steps)."
     )
     prompt = f"Patient: age={age or 'unknown'}, gender={gender or 'unknown'}, vitals={vitals or 'not recorded'}.\nPresenting complaints: {symptoms}"
     res = call_gemini_interaction(prompt, system_instruction=sys_inst, response_schema=TRIAGE_SCHEMA, model=model, thinking_level="low")
@@ -228,33 +243,120 @@ def ai_triage(symptoms, age=None, gender=None, vitals=None, model=None):
         except json.JSONDecodeError:
             pass
 
-    # Deterministic clinical triage fallback
+    # Deterministic clinical triage & emergency medication fallback
     s = (symptoms or "").lower()
-    if any(k in s for k in ("chest pain", "shortness of breath", "palpitation", "radiating", "syncope")):
+    if any(k in s for k in ("chest", "pressure", "angina", "palpitation", "radiating", "syncope", "heart", "cardiac")):
         dept, urg, esi = "Cardiology", "Emergency", 2
-        conds = ["Acute Coronary Syndrome (rule out)", "Unstable Angina", "Arrhythmia"]
-        flags = ["Diaphoresis, crushing substernal pain, or SpO2 < 92% require immediate resuscitation bay"]
-        labs = ["12-Lead ECG (stat)", "Troponin I/T", "CBC", "Chest X-Ray"]
-    elif any(k in s for k in ("stroke", "slurred", "numbness", "seizure", "thunderclap", "migraine", "headache", "dizziness")):
-        dept, urg, esi = "Neurology", ("Emergency" if "stroke" in s or "seizure" in s else "Urgent"), (2 if "stroke" in s else 3)
-        conds = ["Acute Ischemic TIA / Stroke (rule out)", "Complex Migraine", "Vertigo / Vestibular Neuritis"]
-        flags = ["Sudden focal weakness, facial droop, aphasia, or altered sensorium"]
-        labs = ["MRI Brain / Non-contrast CT Head", "Blood Glucose (Fasting)", "Electrolytes"]
-    elif any(k in s for k in ("fracture", "fall", "sprain", "joint", "knee", "back pain", "swelling")):
-        dept, urg, esi = "Orthopedics", "Semi-Urgent", 4
-        conds = ["Musculoskeletal Strain / Sprain", "Closed Fracture (rule out)", "Lumbar Radiculopathy"]
-        flags = ["Neurovascular compromise, open deformity, or loss of distal pulse"]
-        labs = ["X-Ray of affected region", "CRP / ESR if inflammatory"]
+        conds = ["Acute Coronary Syndrome (ACS / MI — rule out)", "Unstable Angina", "Cardiac Arrhythmia"]
+        flags = ["Diaphoresis, crushing substernal pain, hypotension, or SpO2 < 92% require immediate resuscitation bay"]
+        labs = ["12-Lead ECG within 10 min (STAT)", "Cardiac Troponin I/T", "CBC", "Electrolytes", "Portable Chest X-Ray"]
+        meds = [
+            "Tab Aspirin 300mg chewable PO STAT (if no allergy/active bleeding)",
+            "Tab Nitroglycerin (Glyceryl Trinitrate) 0.4mg Sublingual STAT (if SBP > 100 mmHg)",
+            "Tab Clopidogrel 300mg PO loading dose + Tab Atorvastatin 80mg PO STAT (per ACS protocol)",
+            "Inj Morphine 2–4mg IV slow push PRN severe refractory chest pain + Inj Ondansetron 4mg IV",
+            "Oxygen therapy 2–4 L/min via nasal cannula if SpO2 < 94%",
+        ]
+        interventions = ["Continuous 12-lead cardiac monitoring & pulse oximetry", "Establish 2 large-bore IV lines (18G)", "Keep defibrillator/crash cart at bedside"]
+    elif any(k in s for k in ("shortness", "breath", "asthma", "wheez", "copd", "dyspnea", "choking", "spo2", "cough", "pneumonia")):
+        dept, urg, esi = "Emergency", "Emergency", 2
+        conds = ["Acute Severe Bronchospasm / Asthma Exacerbation", "Acute COPD Exacerbation", "Community-Acquired Pneumonia"]
+        flags = ["Silent chest, cyanosis, inability to speak full sentences, SpO2 < 90%, or accessory muscle exhaustion"]
+        labs = ["Arterial Blood Gas (ABG)", "Chest X-Ray (STAT)", "Complete Blood Count", "CRP"]
+        meds = [
+            "Nebulized Salbutamol 5mg + Ipratropium Bromide 0.5mg driven by O2 STAT (repeat q20min x 3)",
+            "Inj Hydrocortisone 100mg IV STAT (or Tab Prednisolone 40mg PO)",
+            "Controlled Oxygen therapy to maintain target SpO2 94–98% (88–92% in chronic COPD)",
+            "Inj Ceftriaxone 1g IV STAT + Tab Azithromycin 500mg PO (if bacterial pneumonia suspected)",
+            "Tab Paracetamol 500mg–1g PO/IV if febrile",
+        ]
+        interventions = ["Position patient upright (High Fowler's position)", "Continuous SpO2 & respiratory rate monitoring", "Prepare non-invasive ventilation (BiPAP) if hypercapnic"]
+    elif any(k in s for k in ("stroke", "slurred", "numbness", "weakness", "paralysis", "seizure", "convulsion", "unconscious", "coma")):
+        dept, urg, esi = "Neurology", "Emergency", 1
+        conds = ["Acute Ischemic / Hemorrhagic Stroke (CVA)", "Status Epilepticus / Acute Seizure", "Transient Ischemic Attack (TIA)"]
+        flags = ["Sudden facial droop, arm drift, speech slurring (FAST positive), GCS < 12, or active tonic-clonic seizure"]
+        labs = ["Non-Contrast CT Head (STAT — Door-to-CT < 20 min)", "Capillary Blood Glucose (STAT)", "MRI Brain", "Coagulation Profile (PT/INR)"]
+        meds = [
+            "If active seizure: Inj Lorazepam 4mg IV slow push (or Inj Diazepam 10mg IV) STAT, followed by Inj Levetiracetam 1g IV infusion",
+            "If hypoglycemic (< 70 mg/dL): Inj 25% Dextrose 100mL IV STAT",
+            "If Acute Ischemic Stroke confirmed on CT (no hemorrhage): IV Alteplase (rtPA) per stroke window OR Tab Aspirin 300mg after CT excludes bleed",
+            "Inj Labetalol 10–20mg IV PRN if severe hypertension > 185/110 mmHg",
+        ]
+        interventions = ["Protect airway, lateral recovery position if post-ictal, suction at bedside", "Keep NPO (Nothing by Mouth) until swallow screen completed", "Record exact symptom onset ('last known well') time"]
+    elif any(k in s for k in ("migraine", "headache", "dizziness", "vertigo")):
+        dept, urg, esi = "Neurology", "Urgent", 3
+        conds = ["Acute Severe Migraine / Tension Headache", "Acute Vestibular Neuritis / Vertigo", "Hypertensive Urgency"]
+        flags = ["Thunderclap onset, neck stiffness/meningismus, photophobia with fever, or focal neurological deficit"]
+        labs = ["Blood Pressure check", "Blood Glucose", "CT Head (if red-flag headache)"]
+        meds = [
+            "Inj Ketorolac 30mg IV/IM or Inj Paracetamol 1g IV infusion for acute headache relief",
+            "Inj Metoclopramide 10mg IV or Inj Ondansetron 4mg IV STAT for nausea/vomiting",
+            "Tab Sumatriptan 50mg PO (if established migraine without cardiovascular contraindications)",
+            "Tab Prochlorperazine 5mg or Tab Betahistine 16mg PO (if acute vertigo/dizziness)",
+        ]
+        interventions = ["Place patient in quiet, darkened room", "IV Normal Saline 500mL hydration", "Serial neurological checks"]
+    elif any(k in s for k in ("abdom", "stomach", "vomit", "diarrhea", "gastritis", "epigastric", "acidity", "nausea", "food poison", "appendic", "colic")):
+        dept, urg, esi = ("Emergency" if "severe" in s or "blood" in s else "General Medicine"), ("Urgent" if "severe" in s or "vomit" in s else "Semi-Urgent"), 3
+        conds = ["Acute Gastroenteritis / Dehydration", "Acute Gastritis / Peptic Ulcer Disease", "Acute Appendicitis / Biliary Colic (rule out)"]
+        flags = ["Peritoneal guarding/rigidity, hematemesis (vomiting blood), melena, or hypovolemic shock"]
+        labs = ["Complete Blood Count", "Serum Electrolytes & Creatinine", "Liver Function Test & Serum Amylase/Lipase", "Ultrasound Abdomen"]
+        meds = [
+            "Inj Omeprazole / Pantoprazole 40mg IV STAT (proton pump inhibitor)",
+            "Inj Ondansetron 4–8mg IV STAT (antiemetic for vomiting/nausea)",
+            "IV Ringer's Lactate or 0.9% Normal Saline 500–1000mL infusion + Oral Rehydration Salts (ORS Sachet)",
+            "Inj Hyoscine Butylbromide (Buscopan) 20mg IV/IM STAT for visceral abdominal cramping/spasm",
+            "Tab Metronidazole 400mg TID or Tab Ciprofloxacin 500mg BD (if bacterial gastroenteritis confirmed)",
+        ]
+        interventions = ["Monitor strict fluid intake/output & hydration status", "Abdominal palpation for rebound tenderness (McBurney's/Murphy's sign)"]
+    elif any(k in s for k in ("allergy", "anaphylax", "rash", "hives", "swelling", "bee", "itch", "urticaria")):
+        dept, urg, esi = "Emergency", ("Emergency" if "throat" in s or "breath" in s or "anaphylax" in s else "Urgent"), 2
+        conds = ["Acute Allergic Reaction / Anaphylaxis", "Acute Urticaria / Angioedema"]
+        flags = ["Stridor, tongue/lip angioedema, hoarseness, wheezing, or hypotension"]
+        labs = ["Continuous Pulse Oximetry & BP", "Complete Blood Count"]
+        meds = [
+            "Inj Adrenaline (Epinephrine) 1:1000 — 0.3–0.5mg IM into anterolateral thigh STAT (if anaphylaxis/airway compromise)",
+            "Inj Hydrocortisone 200mg IV STAT (or Inj Dexamethasone 8mg IV)",
+            "Inj Chlorpheniramine (Avil) 10mg IV slow push OR Tab Cetirizine 10mg PO STAT",
+            "Inj Famotidine 20mg IV (H2 blocker) + IV Normal Saline 0.9% 1000mL rapid bolus if hypotensive",
+        ]
+        interventions = ["Maintain patent airway; prepare airway/intubation kit if angioedema present", "Remove suspected allergen immediately"]
+    elif any(k in s for k in ("fracture", "fall", "sprain", "joint", "knee", "back", "trauma", "accident", "bleed", "wound", "burn", "injury")):
+        dept, urg, esi = "Orthopedics", "Urgent", 3
+        conds = ["Acute Trauma / Closed or Open Fracture (rule out)", "Musculoskeletal Sprain / Soft-Tissue Injury", "Acute Lumbar Radiculopathy"]
+        flags = ["Absent distal pulse, compartment syndrome, open fracture, active arterial bleeding, or C-spine tenderness"]
+        labs = ["X-Ray of affected limb/spine (AP & Lateral)", "Complete Blood Count", "Blood Grouping & Crossmatch (if bleeding)"]
+        meds = [
+            "Inj Ketorolac 30mg IV/IM or Inj Diclofenac 75mg IM STAT for acute trauma pain",
+            "Inj Paracetamol 1g IV infusion + Topical Diclofenac Gel (for localized sprain/strain)",
+            "Inj Tetanus Toxoid (TT) 0.5mL IM STAT (if open wound/laceration/abrasion)",
+            "Inj Ceftriaxone 1g IV STAT (prophylaxis if open fracture or contaminated wound)",
+        ]
+        interventions = ["Immobilize injured limb with splint/backboard; apply direct pressure to any bleeding", "RICE protocol (Rest, Ice, Compression, Elevation) & neurovascular check"]
     elif age and str(age).isdigit() and int(age) < 15:
         dept, urg, esi = "Pediatrics", "Urgent", 3
-        conds = ["Pediatric Viral Syndrome", "Acute Otitis Media / Upper Respiratory Infection"]
-        flags = ["Lethargy, poor oral intake, retractions, or persistent high fever"]
-        labs = ["Complete Blood Count", "Urine Routine"]
+        conds = ["Pediatric Acute Febrile Illness", "Acute Upper Respiratory / Ear Infection", "Pediatric Gastroenteritis"]
+        flags = ["Lethargy, poor oral intake, subcostal retractions, sunken fontanelle, or persistent high fever"]
+        labs = ["Complete Blood Count", "Urine Routine", "Rapid Viral / Malaria / Dengue Screen"]
+        meds = [
+            "Syp Paracetamol (15 mg/kg/dose) PO q6h PRN fever/pain + tepid sponging",
+            "Oral Rehydration Salts (ORS Sachet) small frequent sips after each loose stool/vomiting",
+            "Nebulized Salbutamol 2.5mg (if wheezing or bronchiolitis)",
+            "Syp Amoxicillin (40 mg/kg/day) or Syp Azithromycin (10 mg/kg/day) if bacterial infection confirmed",
+        ]
+        interventions = ["Record accurate pediatric weight (kg) for weight-based dosing", "Encourage oral fluids and monitor urine output"]
     else:
-        dept, urg, esi = "General Medicine", "Routine", 4
-        conds = ["Viral Febrile Illness", "Upper Respiratory Tract Infection", "Dyspepsia / Gastritis"]
-        flags = ["Persistent fever > 39.5°C, hemodynamic instability, or severe dehydration"]
-        labs = ["Complete Blood Count", "Blood Glucose (Fasting)", "Liver Function Test"]
+        dept, urg, esi = "General Medicine", ("Urgent" if "high fever" in s or "severe" in s else "Routine"), (3 if "high fever" in s or "severe" in s else 4)
+        conds = ["Acute Viral Febrile Illness", "Upper Respiratory Tract Infection", "Acute Dyspepsia / Gastritis"]
+        flags = ["Persistent fever > 39.5°C, hemodynamic instability, rigors, or severe dehydration"]
+        labs = ["Complete Blood Count", "Blood Glucose (Fasting/Random)", "Urine Routine", "Liver Function Test"]
+        meds = [
+            "Tab Paracetamol 500mg–1g PO/IV STAT (antipyretic & analgesic for fever/body aches)",
+            "Cap Omeprazole 20mg PO / Inj IV STAT (gastric protection / dyspepsia)",
+            "Tab Cetirizine 10mg PO HS (for nasal congestion / allergic symptoms)",
+            "Oral Rehydration Salts (ORS Sachet) in 1L water + IV Normal Saline 500mL if dehydrated",
+            "Cap Amoxicillin 500mg TID or Tab Azithromycin 500mg OD (only if bacterial focus identified)",
+        ]
+        interventions = ["Record full baseline vitals (BP, Temp, Pulse, RR, SpO2)", "Tepid sponging if Temp > 38.5°C and initiate oral hydration"]
 
     return {
         "urgency": urg,
@@ -263,7 +365,9 @@ def ai_triage(symptoms, age=None, gender=None, vitals=None, model=None):
         "possible_conditions": conds,
         "red_flags": flags,
         "recommended_vitals_and_labs": labs,
-        "triage_notes": f"Triaged to {dept} ({urg}, ESI-{esi}). Record full vitals (BP, Temp, Pulse, SpO2) prior to physician encounter.",
+        "emergency_medications": meds,
+        "immediate_interventions": interventions,
+        "triage_notes": f"Triaged to {dept} ({urg}, ESI-{esi}). Record full vitals (BP, Temp, Pulse, SpO2) and administer stat first-line relief as clinically indicated.",
         "source": "Built-in Clinical Triage Engine (configure GEMINI_API_KEY for live Gemini 3.8 Flash)",
     }
 

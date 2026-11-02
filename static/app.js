@@ -520,35 +520,126 @@ const DEFAULT_AI_STATUS = {
 
 function localAiTriage(fd) {
   const s = (fd.symptoms || "").toLowerCase();
-  let dept = "General Medicine", urg = "Routine", esi = 4,
-    conds = ["Viral Febrile Illness", "Upper Respiratory Tract Infection", "Dyspepsia / Gastritis"],
-    flags = ["Persistent fever > 39.5°C, hemodynamic instability, or severe dehydration"],
-    labs = ["Complete Blood Count", "Blood Glucose (Fasting)", "Liver Function Test"];
-  if (["chest", "pressure", "shortness", "palpitation", "radiating", "syncope"].some(k => s.includes(k))) {
+  let dept = "General Medicine", urg = (s.includes("high fever") || s.includes("severe")) ? "Urgent" : "Routine",
+    esi = urg === "Urgent" ? 3 : 4,
+    conds = ["Acute Viral Febrile Illness", "Upper Respiratory Tract Infection", "Acute Dyspepsia / Gastritis"],
+    flags = ["Persistent fever > 39.5°C, hemodynamic instability, rigors, or severe dehydration"],
+    labs = ["Complete Blood Count", "Blood Glucose (Fasting/Random)", "Urine Routine", "Liver Function Test"],
+    meds = [
+      "Tab Paracetamol 500mg–1g PO/IV STAT (antipyretic & analgesic for fever/body aches)",
+      "Cap Omeprazole 20mg PO / Inj IV STAT (gastric protection / dyspepsia)",
+      "Tab Cetirizine 10mg PO HS (for nasal congestion / allergic symptoms)",
+      "Oral Rehydration Salts (ORS Sachet) in 1L water + IV Normal Saline 500mL if dehydrated",
+      "Cap Amoxicillin 500mg TID or Tab Azithromycin 500mg OD (only if bacterial focus identified)",
+    ],
+    interventions = ["Record full baseline vitals (BP, Temp, Pulse, RR, SpO2)", "Tepid sponging if Temp > 38.5°C and initiate oral hydration"];
+
+  if (["chest", "pressure", "angina", "palpitation", "radiating", "syncope", "heart", "cardiac"].some(k => s.includes(k))) {
     dept = "Cardiology"; urg = "Emergency"; esi = 2;
-    conds = ["Acute Coronary Syndrome (rule out)", "Unstable Angina", "Arrhythmia"];
-    flags = ["Diaphoresis, crushing substernal pain, or SpO2 < 92% require immediate resuscitation bay"];
-    labs = ["12-Lead ECG (stat)", "Troponin I/T", "CBC", "Chest X-Ray"];
-  } else if (["stroke", "slurred", "numbness", "seizure", "migraine", "headache", "dizziness"].some(k => s.includes(k))) {
-    dept = "Neurology"; urg = s.includes("stroke") || s.includes("seizure") ? "Emergency" : "Urgent"; esi = urg === "Emergency" ? 2 : 3;
-    conds = ["Acute Ischemic TIA / Stroke (rule out)", "Complex Migraine", "Vestibular Neuritis"];
-    flags = ["Sudden focal weakness, facial droop, aphasia, or altered sensorium"];
-    labs = ["MRI Brain / Non-contrast CT Head", "Blood Glucose (Fasting)", "Electrolytes"];
-  } else if (["fracture", "fall", "sprain", "joint", "knee", "back", "swelling"].some(k => s.includes(k))) {
-    dept = "Orthopedics"; urg = "Semi-Urgent"; esi = 4;
-    conds = ["Musculoskeletal Strain / Sprain", "Closed Fracture (rule out)", "Lumbar Radiculopathy"];
-    flags = ["Neurovascular compromise, open deformity, or loss of distal pulse"];
-    labs = ["X-Ray of affected region", "CRP / ESR"];
+    conds = ["Acute Coronary Syndrome (ACS / MI — rule out)", "Unstable Angina", "Cardiac Arrhythmia"];
+    flags = ["Diaphoresis, crushing substernal pain, hypotension, or SpO2 < 92% require immediate resuscitation bay"];
+    labs = ["12-Lead ECG within 10 min (STAT)", "Cardiac Troponin I/T", "CBC", "Electrolytes", "Portable Chest X-Ray"];
+    meds = [
+      "Tab Aspirin 300mg chewable PO STAT (if no allergy/active bleeding)",
+      "Tab Nitroglycerin (Glyceryl Trinitrate) 0.4mg Sublingual STAT (if SBP > 100 mmHg)",
+      "Tab Clopidogrel 300mg PO loading dose + Tab Atorvastatin 80mg PO STAT (per ACS protocol)",
+      "Inj Morphine 2–4mg IV slow push PRN severe refractory chest pain + Inj Ondansetron 4mg IV",
+      "Oxygen therapy 2–4 L/min via nasal cannula if SpO2 < 94%",
+    ];
+    interventions = ["Continuous 12-lead cardiac monitoring & pulse oximetry", "Establish 2 large-bore IV lines (18G)", "Keep defibrillator/crash cart at bedside"];
+  } else if (["shortness", "breath", "asthma", "wheez", "copd", "dyspnea", "choking", "spo2", "pneumonia"].some(k => s.includes(k))) {
+    dept = "Emergency"; urg = "Emergency"; esi = 2;
+    conds = ["Acute Severe Bronchospasm / Asthma Exacerbation", "Acute COPD Exacerbation", "Community-Acquired Pneumonia"];
+    flags = ["Silent chest, cyanosis, inability to speak full sentences, SpO2 < 90%, or accessory muscle exhaustion"];
+    labs = ["Arterial Blood Gas (ABG)", "Chest X-Ray (STAT)", "Complete Blood Count", "CRP"];
+    meds = [
+      "Nebulized Salbutamol 5mg + Ipratropium Bromide 0.5mg driven by O2 STAT (repeat q20min x 3)",
+      "Inj Hydrocortisone 100mg IV STAT (or Tab Prednisolone 40mg PO)",
+      "Controlled Oxygen therapy to maintain target SpO2 94–98% (88–92% in chronic COPD)",
+      "Inj Ceftriaxone 1g IV STAT + Tab Azithromycin 500mg PO (if bacterial pneumonia suspected)",
+      "Tab Paracetamol 500mg–1g PO/IV if febrile",
+    ];
+    interventions = ["Position patient upright (High Fowler's position)", "Continuous SpO2 & respiratory rate monitoring", "Prepare non-invasive ventilation (BiPAP) if hypercapnic"];
+  } else if (["stroke", "slurred", "numbness", "weakness", "paralysis", "seizure", "convulsion", "unconscious", "coma"].some(k => s.includes(k))) {
+    dept = "Neurology"; urg = "Emergency"; esi = 1;
+    conds = ["Acute Ischemic / Hemorrhagic Stroke (CVA)", "Status Epilepticus / Acute Seizure", "Transient Ischemic Attack (TIA)"];
+    flags = ["Sudden facial droop, arm drift, speech slurring (FAST positive), GCS < 12, or active tonic-clonic seizure"];
+    labs = ["Non-Contrast CT Head (STAT — Door-to-CT < 20 min)", "Capillary Blood Glucose (STAT)", "MRI Brain", "Coagulation Profile (PT/INR)"];
+    meds = [
+      "If active seizure: Inj Lorazepam 4mg IV slow push (or Inj Diazepam 10mg IV) STAT, followed by Inj Levetiracetam 1g IV infusion",
+      "If hypoglycemic (< 70 mg/dL): Inj 25% Dextrose 100mL IV STAT",
+      "If Acute Ischemic Stroke confirmed on CT (no hemorrhage): IV Alteplase (rtPA) per stroke window OR Tab Aspirin 300mg after CT excludes bleed",
+      "Inj Labetalol 10–20mg IV PRN if severe hypertension > 185/110 mmHg",
+    ];
+    interventions = ["Protect airway, lateral recovery position if post-ictal, suction at bedside", "Keep NPO (Nothing by Mouth) until swallow screen completed", "Record exact symptom onset ('last known well') time"];
+  } else if (["migraine", "headache", "dizziness", "vertigo"].some(k => s.includes(k))) {
+    dept = "Neurology"; urg = "Urgent"; esi = 3;
+    conds = ["Acute Severe Migraine / Tension Headache", "Acute Vestibular Neuritis / Vertigo", "Hypertensive Urgency"];
+    flags = ["Thunderclap onset, neck stiffness/meningismus, photophobia with fever, or focal neurological deficit"];
+    labs = ["Blood Pressure check", "Blood Glucose", "CT Head (if red-flag headache)"];
+    meds = [
+      "Inj Ketorolac 30mg IV/IM or Inj Paracetamol 1g IV infusion for acute headache relief",
+      "Inj Metoclopramide 10mg IV or Inj Ondansetron 4mg IV STAT for nausea/vomiting",
+      "Tab Sumatriptan 50mg PO (if established migraine without cardiovascular contraindications)",
+      "Tab Prochlorperazine 5mg or Tab Betahistine 16mg PO (if acute vertigo/dizziness)",
+    ];
+    interventions = ["Place patient in quiet, darkened room", "IV Normal Saline 500mL hydration", "Serial neurological checks"];
+  } else if (["abdom", "stomach", "vomit", "diarrhea", "gastritis", "epigastric", "acidity", "nausea", "food poison", "appendic", "colic"].some(k => s.includes(k))) {
+    dept = s.includes("severe") || s.includes("blood") ? "Emergency" : "General Medicine";
+    urg = s.includes("severe") || s.includes("vomit") ? "Urgent" : "Semi-Urgent"; esi = 3;
+    conds = ["Acute Gastroenteritis / Dehydration", "Acute Gastritis / Peptic Ulcer Disease", "Acute Appendicitis / Biliary Colic (rule out)"];
+    flags = ["Peritoneal guarding/rigidity, hematemesis (vomiting blood), melena, or hypovolemic shock"];
+    labs = ["Complete Blood Count", "Serum Electrolytes & Creatinine", "Liver Function Test & Serum Amylase/Lipase", "Ultrasound Abdomen"];
+    meds = [
+      "Inj Omeprazole / Pantoprazole 40mg IV STAT (proton pump inhibitor)",
+      "Inj Ondansetron 4–8mg IV STAT (antiemetic for vomiting/nausea)",
+      "IV Ringer's Lactate or 0.9% Normal Saline 500–1000mL infusion + Oral Rehydration Salts (ORS Sachet)",
+      "Inj Hyoscine Butylbromide (Buscopan) 20mg IV/IM STAT for visceral abdominal cramping/spasm",
+      "Tab Metronidazole 400mg TID or Tab Ciprofloxacin 500mg BD (if bacterial gastroenteritis confirmed)",
+    ];
+    interventions = ["Monitor strict fluid intake/output & hydration status", "Abdominal palpation for rebound tenderness (McBurney's/Murphy's sign)"];
+  } else if (["allergy", "anaphylax", "rash", "hives", "bee", "itch", "urticaria"].some(k => s.includes(k))) {
+    dept = "Emergency"; urg = ["throat", "breath", "anaphylax"].some(k => s.includes(k)) ? "Emergency" : "Urgent"; esi = 2;
+    conds = ["Acute Allergic Reaction / Anaphylaxis", "Acute Urticaria / Angioedema"];
+    flags = ["Stridor, tongue/lip angioedema, hoarseness, wheezing, or hypotension"];
+    labs = ["Continuous Pulse Oximetry & BP", "Complete Blood Count"];
+    meds = [
+      "Inj Adrenaline (Epinephrine) 1:1000 — 0.3–0.5mg IM into anterolateral thigh STAT (if anaphylaxis/airway compromise)",
+      "Inj Hydrocortisone 200mg IV STAT (or Inj Dexamethasone 8mg IV)",
+      "Inj Chlorpheniramine (Avil) 10mg IV slow push OR Tab Cetirizine 10mg PO STAT",
+      "Inj Famotidine 20mg IV (H2 blocker) + IV Normal Saline 0.9% 1000mL rapid bolus if hypotensive",
+    ];
+    interventions = ["Maintain patent airway; prepare airway/intubation kit if angioedema present", "Remove suspected allergen immediately"];
+  } else if (["fracture", "fall", "sprain", "joint", "knee", "back", "swelling", "trauma", "accident", "bleed", "wound", "burn", "injury"].some(k => s.includes(k))) {
+    dept = "Orthopedics"; urg = "Urgent"; esi = 3;
+    conds = ["Acute Trauma / Closed or Open Fracture (rule out)", "Musculoskeletal Sprain / Soft-Tissue Injury", "Acute Lumbar Radiculopathy"];
+    flags = ["Absent distal pulse, compartment syndrome, open fracture, active arterial bleeding, or C-spine tenderness"];
+    labs = ["X-Ray of affected limb/spine (AP & Lateral)", "Complete Blood Count", "Blood Grouping & Crossmatch (if bleeding)"];
+    meds = [
+      "Inj Ketorolac 30mg IV/IM or Inj Diclofenac 75mg IM STAT for acute trauma pain",
+      "Inj Paracetamol 1g IV infusion + Topical Diclofenac Gel (for localized sprain/strain)",
+      "Inj Tetanus Toxoid (TT) 0.5mL IM STAT (if open wound/laceration/abrasion)",
+      "Inj Ceftriaxone 1g IV STAT (prophylaxis if open fracture or contaminated wound)",
+    ];
+    interventions = ["Immobilize injured limb with splint/backboard; apply direct pressure to any bleeding", "RICE protocol (Rest, Ice, Compression, Elevation) & neurovascular check"];
   } else if (+fd.age > 0 && +fd.age < 15) {
     dept = "Pediatrics"; urg = "Urgent"; esi = 3;
-    conds = ["Pediatric Viral Syndrome", "Acute Upper Respiratory Infection"];
-    flags = ["Lethargy, poor oral intake, retractions, or persistent high fever"];
-    labs = ["Complete Blood Count", "Urine Routine"];
+    conds = ["Pediatric Acute Febrile Illness", "Acute Upper Respiratory / Ear Infection", "Pediatric Gastroenteritis"];
+    flags = ["Lethargy, poor oral intake, subcostal retractions, sunken fontanelle, or persistent high fever"];
+    labs = ["Complete Blood Count", "Urine Routine", "Rapid Viral / Malaria / Dengue Screen"];
+    meds = [
+      "Syp Paracetamol (15 mg/kg/dose) PO q6h PRN fever/pain + tepid sponging",
+      "Oral Rehydration Salts (ORS Sachet) small frequent sips after each loose stool/vomiting",
+      "Nebulized Salbutamol 2.5mg (if wheezing or bronchiolitis)",
+      "Syp Amoxicillin (40 mg/kg/day) or Syp Azithromycin (10 mg/kg/day) if bacterial infection confirmed",
+    ];
+    interventions = ["Record accurate pediatric weight (kg) for weight-based dosing", "Encourage oral fluids and monitor urine output"];
   }
   return {
     urgency: urg, esi_level: esi, recommended_department: dept, possible_conditions: conds,
     red_flags: flags, recommended_vitals_and_labs: labs,
-    triage_notes: `Triaged to ${dept} (${urg}, ESI-${esi}). Record full vitals (BP, Temp, Pulse, SpO2) prior to physician encounter.`,
+    emergency_medications: meds, immediate_interventions: interventions,
+    triage_notes: `Triaged to ${dept} (${urg}, ESI-${esi}). Record full vitals (BP, Temp, Pulse, SpO2) and administer stat first-line relief as clinically indicated.`,
     source: "Gemini Clinical Triage Engine (" + _browserAiModel + ")",
   };
 }
@@ -773,19 +864,56 @@ async function renderGeminiHub() {
 
   $("#triageF").onsubmit = async e => {
     e.preventDefault();
-    const out = $("#triageOut"); out.classList.remove("hidden"); out.innerHTML = "✨ Evaluating triage acuity…";
+    const out = $("#triageOut"); out.classList.remove("hidden"); out.innerHTML = "✨ Evaluating triage acuity & emergency medication protocol…";
     const fd = Object.fromEntries(new FormData(e.target));
     try {
-      const r = await api("/ai/triage", { method: "POST", body: fd }).catch(() => localAiTriage(fd));
+      const localFallback = localAiTriage(fd);
+      const r = await api("/ai/triage", { method: "POST", body: fd }).catch(() => localFallback);
+      if (!r.emergency_medications || !r.emergency_medications.length) r.emergency_medications = localFallback.emergency_medications;
+      if (!r.immediate_interventions || !r.immediate_interventions.length) r.immediate_interventions = localFallback.immediate_interventions;
       const uBadge = r.urgency === "Emergency" ? "b-bad" : r.urgency === "Urgent" ? "b-warn" : "b-ok";
-      out.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      out.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
         <span><span class="badge ${uBadge}">${esc(r.urgency)} · ESI-${esc(r.esi_level)}</span> &nbsp; <b>Dept:</b> ${esc(r.recommended_department)}</span>
         <span class="muted small">${esc(r.source)}</span>
       </div>
-      <div><b>Differential considerations:</b> ${r.possible_conditions.map(esc).join(", ")}</div>
-      <div style="margin-top:4px;color:var(--danger)"><b>Red flags:</b> ${r.red_flags.map(esc).join("; ")}</div>
-      <div style="margin-top:4px"><b>Recommended stat workup:</b> ${r.recommended_vitals_and_labs.map(esc).join(", ")}</div>
-      <div style="margin-top:6px" class="muted">${esc(r.triage_notes)}</div>`;
+      <div><b>Differential considerations:</b> ${(r.possible_conditions || []).map(esc).join(", ")}</div>
+      <div style="margin-top:4px;color:var(--danger)"><b>⚠ Red flags:</b> ${(r.red_flags || []).map(esc).join("; ")}</div>
+      <div style="margin-top:8px;background:#ecfdf5;border:1px solid #a7f3d0;padding:10px 12px;border-radius:8px">
+        <div style="font-weight:700;color:#065f46;margin-bottom:4px">💊 Emergency &amp; First-Line Treatment Medicines (Stat Protocol):</div>
+        <ul style="margin:4px 0 0 18px;padding:0;color:#064e3b;font-size:13px">
+          ${(r.emergency_medications || []).map(m => `<li style="margin:3px 0">${esc(m)}</li>`).join("")}
+        </ul>
+      </div>
+      <div style="margin-top:8px;background:#eff6ff;border:1px solid #bfdbfe;padding:9px 12px;border-radius:8px;font-size:13px">
+        <b style="color:#1e40af">🚑 Immediate Bedside Stabilization:</b> ${(r.immediate_interventions || []).map(esc).join(" · ")}
+      </div>
+      <div style="margin-top:6px"><b>🔬 Recommended stat workup:</b> ${(r.recommended_vitals_and_labs || []).map(esc).join(", ")}</div>
+      <div style="margin-top:6px" class="muted small">${esc(r.triage_notes)}</div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn sm primary" id="triageToSoapBtn">🩺 Draft Full SOAP &amp; Rx from Triage</button>
+        <button type="button" class="btn sm" id="triageToRxBtn">💊 Check Drug Interactions</button>
+        <button type="button" class="btn sm" id="triagePrintBtn">🖨 Print Emergency Triage Sheet</button>
+      </div>`;
+      $("#triageToSoapBtn").onclick = () => {
+        const sf = $("#soapF");
+        if (sf) {
+          sf.notes.value = `${fd.symptoms || ""} (Triaged: ${r.recommended_department}, ${r.urgency} ESI-${r.esi_level})`;
+          sf.requestSubmit();
+        }
+      };
+      $("#triageToRxBtn").onclick = () => {
+        const inp = $("#rxMedsInput");
+        if (inp) {
+          inp.value = (r.emergency_medications || []).map(x => x.split("(")[0].trim()).join(", ");
+          $("#rxF")?.requestSubmit();
+        }
+      };
+      $("#triagePrintBtn").onclick = () => {
+        const hi = META?.settings || {};
+        const w = window.open("", "_blank", "width=760,height=860");
+        w.document.write(`<title>Emergency Triage Protocol</title><body style="font-family:sans-serif;max-width:680px;margin:30px auto"><div style="border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px"><h1 style="margin:0">${esc(hi.logo_icon || "✚")} ${esc(META?.hospital || "MediCare General Hospital")}</h1><div style="color:#555;font-size:13px">Emergency Triage &amp; Stat Medication Sheet</div></div><p><b>Age/Gender:</b> ${esc(fd.age || "—")} / ${esc(fd.gender || "—")} · <b>Vitals:</b> ${esc(fd.vitals || "—")}<br><b>Presenting Symptoms:</b> ${esc(fd.symptoms || "")}</p><p><b>Acuity:</b> ${esc(r.urgency)} (ESI-${esc(r.esi_level)}) · <b>Department:</b> ${esc(r.recommended_department)}</p><h3>💊 Emergency &amp; First-Line Treatment Medicines</h3><ul>${(r.emergency_medications || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul><h3>🚑 Immediate Bedside Stabilization</h3><ul>${(r.immediate_interventions || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul><h3>🔬 Stat Diagnostic Workup</h3><p>${(r.recommended_vitals_and_labs || []).map(esc).join(", ")}</p><p style="color:#b91c1c"><b>Red Flags:</b> ${(r.red_flags || []).map(esc).join("; ")}</p></body>`);
+        w.document.close(); w.print();
+      };
     } catch (err) { out.textContent = err.message; }
   };
 
