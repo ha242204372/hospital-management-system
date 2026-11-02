@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""MediCare HMS — Entry-Point HTTP Server & Router (MVC Architecture).
+
+Directory Structure:
+  app/
+    config.py                      # Paths, constants, roles, ApiError
+    models/
+      db.py                        # SQLite connection, schema DDL, query & billing helpers
+      schema_registry.py           # Resource definitions (RES) & lookup queries (REFS)
+      seed.py                      # Demo seeding & automatic migration to database/hospital.db
+    controllers/
+      auth_controller.py           # Password hashing, login, logout, session store
+      crud_controller.py           # Generic CRUD, validation, clinical & billing hooks
+      analytics_controller.py      # Dashboard KPIs, 30-day Reports, 360° Patient Profile, Invoices
+      ai_controller.py             # Gemini AI Hub routes (/api/ai/*)
+      db_controller.py             # Database Studio routes (/api/db/*)
+    views/
+      templates/index.html         # SPA HTML shell
+      static/css/style.css         # Multi-theme stylesheet (Royal Indigo default + 5 themes)
+      static/js/app.js             # Frontend application & canvas charts
+  database/
+    hospital.db                    # SQLite relational database file
+"""
+import json
+import mimetypes
+import os
+import re
+import sqlite3
+import sys
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+
+import gemini_ai
+from app.config import (
+    DB_PATH,
+    STATIC_DIR,
+    TEMPLATES_DIR,
+    VIEWS_DIR,
+    HOSPITAL_NAME,
+    ROLES,
+    ApiError,
+)
+import app.models.db as db_mod
+from app.models.db import connect, rows, one, today, audit, recompute
+from app.models.schema_registry import RES, REFS
+from app.models.seed import seed, init_db as _init_db
+from app.controllers.auth_controller import SESSIONS, current_user, handle_login, handle_logout
+from app.controllers.crud_controller import get_res, create, update, delete, discharge
+from app.controllers.analytics_controller import invoice_detail, patient_profile, dashboard, reports
+from app.controllers.ai_controller import handle_ai_route
+from app.controllers.db_controller import get_db_info, run_sql_query, reset_demo_db
+
+# Default database location inside `database/hospital.db` (overridable for tests)
+DB = DB_PATH
+
+
+def init_db():
+    db_mod.ACTIVE_DB = DB
+    _init_db(DB)
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "MediCareHMS/2.0-MVC"
+
+    def log_message(self, fmt, *args):
+        pass
+
+    def _send(self, code, body, ctype="application/json", headers=None):
+        if not isinstance(body, bytes):
+            body = json.dumps(body, default=str).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def current_user(self):
+        return current_user(self.headers.get("Cookie", ""))
+
+    def body(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        if not n:
+            return {}
+        try:
+            return json.loads(self.rfile.read(n))
+        except ValueError:
+            raise ApiError(400, "Invalid JSON")
+
+    def do_GET(self):
+        if urlparse(self.path).path == "/api/db/download":
+            user = self.current_user()
+            if not user or user["role"] != "Admin":
+                return self._send(403, {"error": "Only Admin can download database backups"})
+            db_mod.ACTIVE_DB = DB
+            with open(DB, "rb") as f:
+                data = f.read()
+            return self._send(
+                200,
+                data,
+                "application/x-sqlite3",
+                {"Content-Disposition": 'attachment; filename="hospital-backup.db"'},
+            )
+        self.dispatch("GET")
+
+    def do_POST(self):
+        self.dispatch("POST")
+
+    def do_PUT(self):
+        self.dispatch("PUT")
+
+    def do_DELETE(self):
+        self.dispatch("DELETE")
+
+    def static(self, path):
+        if path in ("/", "", "/index.html"):
+            tpl = os.path.join(TEMPLATES_DIR, "index.html")
+            full = tpl if os.path.isfile(tpl) else os.path.join(STATIC_DIR, "index.html")
+        else:
+            rel = path.lstrip("/").replace("static/", "", 1)
+            full = os.path.normpath(os.path.join(STATIC_DIR, rel))
+            if not (full.startswith(STATIC_DIR) and os.path.isfile(full)):
+                # Check MVC views/static fallback
+                alt_map = {
+                    "style.css": os.path.join(VIEWS_DIR, "static", "css", "style.css"),
+                    "app.js": os.path.join(VIEWS_DIR, "static", "js", "app.js"),
+                }
+                full = alt_map.get(rel, full)
+        if not os.path.isfile(full):
+            return self._send(404, b"Not found", "text/plain")
+        with open(full, "rb") as f:
+            self._send(200, f.read(), mimetypes.guess_type(full)[0] or "application/octet-stream")
+
+    def dispatch(self, method):
+        u = urlparse(self.path)
+        path = u.path
+        if not path.startswith("/api/"):
+            return self.static(path) if method == "GET" else self._send(405, b"", "text/plain")
+        db_mod.ACTIVE_DB = DB
+        conn = connect(DB)
+        try:
+            out = self.api(conn, method, path, parse_qs(u.query))
+            conn.commit()
+            if isinstance(out, tuple):
+                self._send(200, out[0], headers=out[1])
+            else:
+                self._send(200, out)
+        except ApiError as e:
+            conn.rollback()
+            self._send(e.code, {"error": e.msg})
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            self._send(409, {"error": f"Data conflict: {e}"})
+        except Exception as e:  # pragma: no cover
+            conn.rollback()
+            import traceback
+            traceback.print_exc()
+            self._send(500, {"error": "Server error: " + str(e)})
+        finally:
+            conn.close()
+
+    def api(self, conn, method, path, qs):
+        # 1. Auth Controller routes
+        if path == "/api/login" and method == "POST":
+            return handle_login(conn, self.body())
+        if path == "/api/logout":
+            return handle_logout(self.headers.get("Cookie", ""))
+
+        user = self.current_user()
+        if not user:
+            raise ApiError(401, "Not authenticated")
+        role = user["role"]
+
+        # 2. Metadata route
+        if path == "/api/meta":
+            res = []
+            for k, r in RES.items():
+                if role in r["read"]:
+                    res.append(
+                        dict(
+                            key=k,
+                            label=r["label"],
+                            icon=r["icon"],
+                            group=r["group"],
+                            fields=r["fields"],
+                            columns=r["columns"],
+                            canWrite=role in r["write"],
+                            canDelete=role in r["delete"],
+                            noEdit=bool(r.get("no_edit")),
+                            actions=r.get("actions", []) if role in r["write"] else [],
+                            profile=bool(r.get("profile")),
+                            invoice=bool(r.get("invoice")),
+                            flag=r.get("flag"),
+                            noEditWhen=r.get("no_edit_when"),
+                        )
+                    )
+            return {
+                "user": user,
+                "hospital": HOSPITAL_NAME,
+                "resources": res,
+                "dashboard": role in ROLES,
+                "reports": role in ("Admin", "Accountant"),
+                "ai": gemini_ai.get_status(),
+            }
+
+        # 3. Gemini AI Hub Controller routes
+        if path.startswith("/api/ai/"):
+            ai_out = handle_ai_route(conn, method, path, user, self.body)
+            if ai_out is not None:
+                return ai_out
+
+        # 4. Database Studio Controller routes
+        if path == "/api/db/info" and method == "GET":
+            return get_db_info(conn, user)
+        if path == "/api/db/query" and method == "POST":
+            return run_sql_query(conn, user, self.body())
+        if path == "/api/db/reset" and method == "POST":
+            return reset_demo_db(conn, user)
+
+        # 5. Quick Operational Status routes
+        m = re.fullmatch(r"/api/appointments/(\d+)/status", path)
+        if m and method == "POST":
+            get_res("appointments", user, "write")
+            aid = int(m.group(1))
+            st = (self.body().get("status") or "").strip()
+            if st not in ("Scheduled", "Completed", "Cancelled", "No-show"):
+                raise ApiError(400, "Invalid appointment status")
+            conn.execute("UPDATE appointments SET status=? WHERE id=?", (st, aid))
+            audit(conn, user, "appointment_status", f"appointment #{aid} -> {st}")
+            return {"ok": True}
+
+        m = re.fullmatch(r"/api/medicines/(\d+)/restock", path)
+        if m and method == "POST":
+            get_res("medicines", user, "write")
+            mid = int(m.group(1))
+            try:
+                qty = int(self.body().get("quantity") or 0)
+            except ValueError:
+                raise ApiError(400, "Invalid quantity")
+            if qty <= 0:
+                raise ApiError(400, "Quantity must be positive")
+            conn.execute("UPDATE medicines SET stock=stock+? WHERE id=?", (qty, mid))
+            med = one(conn, "SELECT * FROM medicines WHERE id=?", (mid,))
+            audit(conn, user, "restock", f"{med['name']} +{qty} (now {med['stock']})")
+            return med
+
+        m = re.fullmatch(r"/api/beds/(\d+)/status", path)
+        if m and method == "POST":
+            get_res("beds", user, "write")
+            bid = int(m.group(1))
+            st = (self.body().get("status") or "").strip()
+            if st not in ("Available", "Maintenance"):
+                raise ApiError(400, "Can only toggle between Available and Maintenance (use Admissions to occupy/discharge)")
+            cur_b = one(conn, "SELECT * FROM beds WHERE id=?", (bid,))
+            if not cur_b:
+                raise ApiError(404, "Bed not found")
+            if cur_b["status"] == "Occupied":
+                raise ApiError(400, "Cannot change status of an Occupied bed — discharge the patient first")
+            conn.execute("UPDATE beds SET status=? WHERE id=?", (st, bid))
+            audit(conn, user, "bed_status", f"bed #{bid} -> {st}")
+            return {"ok": True}
+
+        # 6. Reference Options route
+        m = re.fullmatch(r"/api/options/(\w+)", path)
+        if m:
+            if m.group(1) not in REFS:
+                raise ApiError(404, "Unknown option set")
+            opts = rows(conn, REFS[m.group(1)])
+            if m.group(1) == "patients" and role == "Patient" and user.get("patient_id"):
+                opts = [o for o in opts if o["id"] == user["patient_id"]]
+            return opts
+
+        # 7. Analytics & Profile Controller routes
+        if path == "/api/dashboard":
+            return dashboard(conn)
+        if path == "/api/reports":
+            if role not in ("Admin", "Accountant"):
+                raise ApiError(403, "Not permitted")
+            return reports(conn)
+
+        m = re.fullmatch(r"/api/patients/(\d+)/profile", path)
+        if m:
+            pid = int(m.group(1))
+            get_res("patients", user, "read")
+            if role == "Patient" and user.get("patient_id") and pid != user["patient_id"]:
+                raise ApiError(403, "Cannot view another patient's profile")
+            if role not in ("Admin", "Doctor", "Nurse", "Patient"):
+                p = patient_profile(conn, pid)
+                for k in ("encounters", "labs", "medicines"):
+                    p[k] = []
+                return p
+            return patient_profile(conn, pid)
+
+        m = re.fullmatch(r"/api/admissions/(\d+)/discharge", path)
+        if m and method == "POST":
+            get_res("admissions", user, "write")
+            return discharge(conn, int(m.group(1)), user)
+
+        # 8. Invoice & Payment Controller routes
+        m = re.fullmatch(r"/api/invoices/(\d+)(?:/(items|payments))?", path)
+        if m:
+            get_res("invoices", user, "read" if method == "GET" else "write")
+            iid, sub = int(m.group(1)), m.group(2)
+            if method == "GET" and not sub:
+                return invoice_detail(conn, iid)
+            if method == "POST" and sub == "items":
+                b = self.body()
+                try:
+                    amt = float(b.get("amount"))
+                except (TypeError, ValueError):
+                    raise ApiError(400, "Valid amount required")
+                if not b.get("description"):
+                    raise ApiError(400, "Description required")
+                conn.execute("INSERT INTO invoice_items(invoice_id,description,amount) VALUES(?,?,?)", (iid, b["description"], amt))
+                recompute(conn, iid)
+                audit(conn, user, "invoice item", f"invoice #{iid}")
+                return invoice_detail(conn, iid)
+            if method == "POST" and sub == "payments":
+                b = self.body()
+                try:
+                    amt = float(b.get("amount"))
+                except (TypeError, ValueError):
+                    raise ApiError(400, "Valid amount required")
+                inv = one(conn, "SELECT total, paid FROM invoices WHERE id=?", (iid,))
+                if amt <= 0:
+                    raise ApiError(400, "Amount must be positive")
+                if amt > inv["total"] - inv["paid"] + 0.001:
+                    raise ApiError(400, f"Payment exceeds balance ({inv['total'] - inv['paid']:.2f})")
+                conn.execute("INSERT INTO payments(invoice_id,amount,method,date) VALUES(?,?,?,?)", (iid, amt, b.get("method") or "Cash", today()))
+                recompute(conn, iid)
+                audit(conn, user, "payment", f"invoice #{iid} amount {amt}")
+                return invoice_detail(conn, iid)
+            if method == "DELETE" and sub == "items":
+                raise ApiError(400, "Use item id endpoint")
+
+        m = re.fullmatch(r"/api/invoice_items/(\d+)", path)
+        if m and method == "DELETE":
+            get_res("invoices", user, "write")
+            it = one(conn, "SELECT invoice_id FROM invoice_items WHERE id=?", (int(m.group(1)),))
+            if it:
+                conn.execute("DELETE FROM invoice_items WHERE id=?", (int(m.group(1)),))
+                recompute(conn, it["invoice_id"])
+            return {"ok": True}
+
+        # 9. Generic Resource CRUD Controller routes
+        m = re.fullmatch(r"/api/r/(\w+)(?:/(\d+))?", path)
+        if m:
+            key, id_ = m.group(1), m.group(2)
+            if method == "GET":
+                r = get_res(key, user, "read")
+                data = rows(conn, r["sql"])
+                if role == "Patient" and user.get("patient_id"):
+                    pid = user["patient_id"]
+                    if key == "patients":
+                        data = [x for x in data if x.get("id") == pid]
+                    elif data and "patient_id" in data[0]:
+                        data = [x for x in data if x.get("patient_id") == pid]
+                q = (qs.get("q", [""])[0]).lower()
+                if q:
+                    data = [x for x in data if q in " ".join(str(v) for v in x.values()).lower()]
+                return data
+            if method == "POST" and not id_:
+                body = self.body()
+                if role == "Patient" and user.get("patient_id"):
+                    body["patient_id"] = user["patient_id"]
+                return {"id": create(conn, key, body, user)}
+            if method == "PUT" and id_:
+                update(conn, key, int(id_), self.body(), user)
+                return {"ok": True}
+            if method == "DELETE" and id_:
+                delete(conn, key, int(id_), user)
+                return {"ok": True}
+
+        m = re.fullmatch(r"/api/record/(\w+)/(\d+)", path)
+        if m and method == "GET":
+            r = get_res(m.group(1), user, "read")
+            rec = one(conn, f"SELECT * FROM {r['table']} WHERE id=?", (int(m.group(2)),))
+            if not rec:
+                raise ApiError(404, "Not found")
+            rec.pop("password_hash", None)
+            return rec
+        raise ApiError(404, "Unknown endpoint")
+
+
+class ReusableHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
+def start_server(port):
+    import subprocess
+    import signal
+    import time
+    try:
+        httpd = ReusableHTTPServer(("127.0.0.1", port), Handler)
+    except OSError:
+        try:
+            out = subprocess.check_output(["/usr/sbin/lsof", "-ti", f"tcp:{port}"], text=True)
+            for p in out.split():
+                pid = int(p)
+                if pid != os.getpid():
+                    os.kill(pid, signal.SIGTERM)
+            time.sleep(0.4)
+        except Exception:
+            pass
+        httpd = ReusableHTTPServer(("127.0.0.1", port), Handler)
+    print(f"{HOSPITAL_NAME} HMS (MVC) running on http://localhost:{port}")
+    print(f"Database file: {DB}")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutting down server.")
+        httpd.server_close()
+
+
+if __name__ == "__main__":
+    if "--reset" in sys.argv and os.path.exists(DB):
+        os.remove(DB)
+    init_db()
+    port = int(os.environ.get("PORT", 8000))
+    start_server(port)
