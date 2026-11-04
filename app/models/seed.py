@@ -237,6 +237,11 @@ def seed(conn):
 def init_db(target_db=None):
     if target_db:
         db_mod.ACTIVE_DB = target_db
+    # Skip SQLite file migration and schema init when using PostgreSQL
+    if getattr(db_mod, "USE_POSTGRES", False):
+        conn = connect()
+        # Tables already created via migration; just ensure we can query
+        return
     # Automatically migrate root hospital.db into database/hospital.db if needed
     if db_mod.ACTIVE_DB == DB_PATH and not os.path.exists(DB_PATH) and os.path.exists(LEGACY_DB_PATH):
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
