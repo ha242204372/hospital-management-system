@@ -12,7 +12,7 @@ VIEWS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "views")
 TEMPLATES_DIR = os.path.join(VIEWS_DIR, "templates")
 STATIC_DIR = os.path.join(ROOT_DIR, "static")
 
-HOSPITAL_NAME = "MediCare General Hospital"
+HOSPITAL_NAME = "VizMedCare"
 ROLES = ["Admin", "Doctor", "Nurse", "Receptionist", "Pharmacist", "Lab Technician", "Accountant", "Patient"]
 ALL = ROLES
 GENDERS = ["Male", "Female", "Other"]
