@@ -65,7 +65,60 @@ async function showLogin() {
 }
 $("#loginForm").onsubmit = async e => {
   e.preventDefault(); const f = new FormData(e.target);
-  try { await api("/login", { method: "POST", body: Object.fromEntries(f) }); $("#loginErr").textContent = ""; e.target.reset(); boot(); }
+  try { await api("/login", { method: "POST", body: Object.fromEntries(f) }); $("#loginErr").textContent = ""; e.target.reset(); 
+async function renderAccounts() {
+  $("#view").innerHTML = "Loading…";
+  let fin, gl;
+  try {
+    fin = await api("/accounts/kpis");
+    gl = await api("/accounts/gl");
+  } catch (e) { return fail(e); }
+  const kp = (ic, bg, v, l) => `<div class="card kpi"><div class="ic" style="background:${bg}">${ic}</div><div><div class="v">${v}</div><div class="l">${l}</div></div></div>`;
+  const tabs = `
+    <div class="chips" id="acctTabs" style="margin-bottom:12px">
+      <button class="chip active" data-tab="overview">1. Overview</button>
+      <button class="chip" data-tab="pl">2. P&L</button>
+      <button class="chip" data-tab="gl">3. General Ledger Dashboard & Cashbook</button>
+    </div>`;
+  const overview = `
+    <div class="grid kpis">
+      ${kp("📈","#e1f5ec", money(fin.accrued_revenue), "Total Accrued Revenue")}
+      ${kp("💵","#dff3f4", money(fin.cash_inflow), "Realized Cash Inflow")}
+      ${kp("💸","#fbe0e0", money(fin.operating_expenses), `Total Operating Expenses (${fin.expense_ratio}%)`)}
+      ${kp("🏆","#fdf0d3", money(fin.net_profit), `Net Profit / Surplus (${fin.net_margin}%)`)}
+      ${kp("🧾","#efe9fb", money(fin.accounts_receivable), "Accounts Receivable")}
+      ${kp("🏢","#e4effb", money(fin.accounts_payable), "Accounts Payable")}
+      ${kp("⚖️","#e1f5ec", money(fin.total_assets), "Balance Sheet Total Assets")}
+      ${kp("📒","#dff3f4", money(fin.gl_balance), "GL Closing Cashbook Balance")}
+    </div>`;
+  const pl = `
+    <div class="grid cols2">
+      ${card("Revenue Streams", "", (fin.accrued_revenue ? `<p>Total Accrued: <b>${money(fin.accrued_revenue)}</b></p>` : "No data"))}
+      ${card("Expenses", "", `<p>Total Expenses: <b>${money(fin.operating_expenses)}</b><br>Paid: ${money(fin.expenses_paid)}</p>`)}
+    </div>`;
+  const glView = `
+    <div class="grid kpis">
+      ${kp("➕","#e1f5ec", money(gl.kpis.gl_credits), "Total GL Credits (Inflows)")}
+      ${kp("➖","#fbe0e0", money(gl.kpis.gl_debits), "Total GL Debits (Outflows)")}
+      ${kp("📒","#dff3f4", money(gl.kpis.gl_balance), "Net Closing GL Cashbook Balance")}
+      ${kp("📋","#efe9fb", gl.kpis.account_heads, "Active GL Account Heads")}
+    </div>
+    <h3 style="margin:16px 0 8px">📊 Summarized GL Trial Balance by Account Head</h3>
+    ${miniTable([["account","Account"],["entries","Entries"],["credits","Credits (+)"],["debits","Debits (−)"],["net","Net"]], gl.trial_balance)}
+    <h3 style="margin:16px 0 8px">💳 GL Cash & Bank Channel Dashboard</h3>
+    ${miniTable([["channel","Channel"],["inflows","Inflows"],["outflows","Outflows"],["net","Net"]], gl.channels)}
+    <h3 style="margin:16px 0 8px">Chronological General Ledger</h3>
+    ${miniTable([["date","Date"],["type","Type"],["account","Account"],["credit","Credit"],["debit","Debit"],["net","Net"]], gl.entries)}`;
+  $("#view").innerHTML = tabs + `<div id="acctContent">${overview}</div>`;
+  const content = { overview, pl, gl: glView };
+  document.querySelectorAll("#acctTabs .chip").forEach(c => c.onclick = () => {
+    document.querySelectorAll("#acctTabs .chip").forEach(x => x.classList.remove("active"));
+    c.classList.add("active");
+    $("#acctContent").innerHTML = content[c.dataset.tab];
+  });
+}
+
+boot(); }
   catch (err) { $("#loginErr").textContent = err.message; }
 };
 $("#demoAccounts")?.addEventListener("click", e => {
@@ -100,6 +153,9 @@ async function boot() {
   }
   h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
+  if (META.user.role === "Admin" || META.user.role === "Accountant") {
+    h += `<div class="nav" data-go="accounts"><span>💳</span>Accounts & Finance</div>`;
+  }
   if (META.user.role === "Admin") {
     h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
   }
@@ -109,10 +165,11 @@ async function boot() {
 }
 $("#sidebar").onclick = e => { const n = e.target.closest("[data-go]"); if (n) { go(n.dataset.go); $("#sidebar").classList.remove("open"); } };
 function go(key) {
-  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
+  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio", "accounts"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
   current = key; location.hash = key;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
+  if (key === "accounts") { $("#pageTitle").textContent = "💳 Accounts & Finance Hub"; return renderAccounts(); }
   if (key === "gemini_ai") { $("#pageTitle").textContent = "✨ Gemini AI Clinical & Operations Hub"; return renderGeminiHub(); }
   if (key === "reports") { $("#pageTitle").textContent = "Reports & Analytics"; return renderReports(); }
   if (key === "settings") { $("#pageTitle").textContent = "⚙️ Hospital Setup & Master Data"; return renderSettings(); }
@@ -186,6 +243,50 @@ async function renderDashboard() {
     ${kp("🔬", "#e4effb", k.pending_labs, "Pending lab orders", can("lab_orders") && "lab_orders")}
     ${kp("💊", "#fdf0d3", k.low_stock + " / " + k.expiring, "Low stock / expiring ≤90d", can("medicines") && "medicines")}
   </div>
+  ${d.finance ? `
+  <h3 style="margin:18px 0 8px">📊 Financial Overview</h3>
+  <div class="grid kpis">
+    ${kp("📈", "#e1f5ec", money(d.finance.accrued_revenue), "Total Accrued Revenue (Gross Billed)", "accounts")}
+    ${kp("💵", "#dff3f4", money(d.finance.cash_inflow), "Realized Cash Inflow", "accounts")}
+    ${kp("💸", "#fbe0e0", money(d.finance.operating_expenses) + ` <small>(${d.finance.expense_ratio}%)</small>`, "Total Operating Expenses", "accounts")}
+    ${kp("🏆", "#fdf0d3", money(d.finance.net_profit) + ` <small>(${d.finance.net_margin}%)</small>`, "Net Profit / Surplus", "accounts")}
+    ${kp("🧾", "#efe9fb", money(d.finance.accounts_receivable), "Accounts Receivable", "accounts")}
+    ${kp("🏢", "#e4effb", money(d.finance.accounts_payable), "Accounts Payable", "accounts")}
+    ${kp("⚖️", "#e1f5ec", money(d.finance.total_assets), "Balance Sheet Total Assets", "accounts")}
+    ${kp("📒", "#dff3f4", money(d.finance.gl_balance), "GL Closing Cashbook Balance", "accounts")}
+  </div>
+  <div class="grid cols2">
+    ${card("📊 Summarized Profit & Loss", "", `
+      <div style="font-size:13px;line-height:1.6">
+        <b>Revenue by Clinical Stream</b><br>
+        ${(d.pnl?.revenue_streams||[]).slice(0,5).map(s=>`${esc(s.label)}: ${money(s.value)}`).join("<br>") || "—"}
+        <hr style="border:0;border-top:1px solid #eee;margin:8px 0">
+        <b>Operating Expenses by Head</b><br>
+        ${(d.pnl?.expense_heads||[]).map(s=>`${esc(s.label)}: ${money(s.value)}`).join("<br>") || "No expenses recorded"}
+        <hr style="border:0;border-top:1px solid #eee;margin:8px 0">
+        <b>Net Surplus:</b> ${money(d.finance.net_profit)} &nbsp; <b>Margin:</b> ${d.finance.net_margin}%
+      </div>`)}
+    ${card("⚖️ Hospital Balance Sheet & GL Trial Summary", "", `
+      <div style="font-size:13px;line-height:1.6">
+        <b>Assets</b><br>
+        Cash in Hand & Bank: ${money(d.balance_sheet.assets.cash_and_bank)}<br>
+        Accounts Receivable: ${money(d.balance_sheet.assets.accounts_receivable)}<br>
+        Pharmacy Stock: ${money(d.balance_sheet.assets.pharmacy_stock)}<br>
+        Fixed Assets: ${money(d.balance_sheet.assets.fixed_assets)}<br>
+        <b>Total Assets: ${money(d.balance_sheet.assets.total)}</b>
+        <hr style="border:0;border-top:1px solid #eee;margin:8px 0">
+        <b>Liabilities & Equity</b><br>
+        Accounts Payable: ${money(d.balance_sheet.liabilities_equity.accounts_payable)}<br>
+        Retained Surplus: ${money(d.balance_sheet.liabilities_equity.retained_surplus)}
+        <hr style="border:0;border-top:1px solid #eee;margin:8px 0">
+        <b>📒 GL Summary</b> &nbsp;
+        Credits: ${money(d.balance_sheet.gl.credits)} &nbsp;
+        Debits: ${money(d.balance_sheet.gl.debits)} &nbsp;
+        Balance: ${money(d.balance_sheet.gl.balance)}
+        <br><button class="btn sm primary" onclick="go('accounts')" style="margin-top:6px">View GL Dashboard →</button>
+      </div>`)}
+  </div>
+  ` : ""}
   <div class="grid cols2">${card("Appointments – last 7 days", "c1")}${card(`Revenue collected (${CURRENCY}) – last 14 days`, "c2")}</div>
   <div class="grid cols2">${card("Bed occupancy by ward", "", '<div id="wardBars"></div>')}${card("Appointments by department", "c3")}</div>
   <div class="grid cols2">${card("Appointment status", "c4")}${card("Invoice status", "c5")}</div>
@@ -1904,6 +2005,59 @@ async function renderSettings() {
     drawMasterTab();
   });
   drawMasterTab();
+}
+
+
+async function renderAccounts() {
+  $("#view").innerHTML = "Loading…";
+  let fin, gl;
+  try {
+    fin = await api("/accounts/kpis");
+    gl = await api("/accounts/gl");
+  } catch (e) { return fail(e); }
+  const kp = (ic, bg, v, l) => `<div class="card kpi"><div class="ic" style="background:${bg}">${ic}</div><div><div class="v">${v}</div><div class="l">${l}</div></div></div>`;
+  const tabs = `
+    <div class="chips" id="acctTabs" style="margin-bottom:12px">
+      <button class="chip active" data-tab="overview">1. Overview</button>
+      <button class="chip" data-tab="pl">2. P&L</button>
+      <button class="chip" data-tab="gl">3. General Ledger Dashboard & Cashbook</button>
+    </div>`;
+  const overview = `
+    <div class="grid kpis">
+      ${kp("📈","#e1f5ec", money(fin.accrued_revenue), "Total Accrued Revenue")}
+      ${kp("💵","#dff3f4", money(fin.cash_inflow), "Realized Cash Inflow")}
+      ${kp("💸","#fbe0e0", money(fin.operating_expenses), `Total Operating Expenses (${fin.expense_ratio}%)`)}
+      ${kp("🏆","#fdf0d3", money(fin.net_profit), `Net Profit / Surplus (${fin.net_margin}%)`)}
+      ${kp("🧾","#efe9fb", money(fin.accounts_receivable), "Accounts Receivable")}
+      ${kp("🏢","#e4effb", money(fin.accounts_payable), "Accounts Payable")}
+      ${kp("⚖️","#e1f5ec", money(fin.total_assets), "Balance Sheet Total Assets")}
+      ${kp("📒","#dff3f4", money(fin.gl_balance), "GL Closing Cashbook Balance")}
+    </div>`;
+  const pl = `
+    <div class="grid cols2">
+      ${card("Revenue Streams", "", (fin.accrued_revenue ? `<p>Total Accrued: <b>${money(fin.accrued_revenue)}</b></p>` : "No data"))}
+      ${card("Expenses", "", `<p>Total Expenses: <b>${money(fin.operating_expenses)}</b><br>Paid: ${money(fin.expenses_paid)}</p>`)}
+    </div>`;
+  const glView = `
+    <div class="grid kpis">
+      ${kp("➕","#e1f5ec", money(gl.kpis.gl_credits), "Total GL Credits (Inflows)")}
+      ${kp("➖","#fbe0e0", money(gl.kpis.gl_debits), "Total GL Debits (Outflows)")}
+      ${kp("📒","#dff3f4", money(gl.kpis.gl_balance), "Net Closing GL Cashbook Balance")}
+      ${kp("📋","#efe9fb", gl.kpis.account_heads, "Active GL Account Heads")}
+    </div>
+    <h3 style="margin:16px 0 8px">📊 Summarized GL Trial Balance by Account Head</h3>
+    ${miniTable([["account","Account"],["entries","Entries"],["credits","Credits (+)"],["debits","Debits (−)"],["net","Net"]], gl.trial_balance)}
+    <h3 style="margin:16px 0 8px">💳 GL Cash & Bank Channel Dashboard</h3>
+    ${miniTable([["channel","Channel"],["inflows","Inflows"],["outflows","Outflows"],["net","Net"]], gl.channels)}
+    <h3 style="margin:16px 0 8px">Chronological General Ledger</h3>
+    ${miniTable([["date","Date"],["type","Type"],["account","Account"],["credit","Credit"],["debit","Debit"],["net","Net"]], gl.entries)}`;
+  $("#view").innerHTML = tabs + `<div id="acctContent">${overview}</div>`;
+  const content = { overview, pl, gl: glView };
+  document.querySelectorAll("#acctTabs .chip").forEach(c => c.onclick = () => {
+    document.querySelectorAll("#acctTabs .chip").forEach(x => x.classList.remove("active"));
+    c.classList.add("active");
+    $("#acctContent").innerHTML = content[c.dataset.tab];
+  });
 }
 
 boot();
