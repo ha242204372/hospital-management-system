@@ -89,6 +89,24 @@ def save_settings(conn, data):
 
 
 def ensure_extra_tables(conn):
+    _exec(conn, """CREATE TABLE IF NOT EXISTS mar (
+        id SERIAL PRIMARY KEY,
+        patient_id INTEGER NOT NULL REFERENCES patients(id),
+        medicine TEXT NOT NULL,
+        dose TEXT,
+        route TEXT,
+        scheduled_time TEXT,
+        given_time TEXT,
+        status TEXT DEFAULT 'Scheduled',
+        notes TEXT,
+        nurse TEXT
+    )""")
+    # Add visit_type column to appointments if missing (SQLite/Postgres compatible best-effort)
+    try:
+        _exec(conn, "ALTER TABLE appointments ADD COLUMN visit_type TEXT DEFAULT 'In-person'")
+    except Exception:
+        pass
+
     """Create tables added after initial migration."""
     _exec(conn, """CREATE TABLE IF NOT EXISTS prescriptions (
         id SERIAL PRIMARY KEY,
