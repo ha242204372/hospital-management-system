@@ -4,9 +4,10 @@ from app.models.db import rows, one, scalar, today
 
 def ensure_finance_tables(conn):
     """Create expense / asset tables if missing so finance features work on existing DBs."""
-    conn.executescript("""
+    from app.models.db import _exec
+    _exec(conn, """
     CREATE TABLE IF NOT EXISTS expenses (
-        id INTEGER PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         date TEXT NOT NULL,
         category TEXT NOT NULL,
         vendor TEXT,
@@ -16,16 +17,18 @@ def ensure_finance_tables(conn):
         status TEXT DEFAULT 'Unpaid',
         method TEXT,
         notes TEXT
-    );
+    )
+    """)
+    _exec(conn, """
     CREATE TABLE IF NOT EXISTS assets (
-        id INTEGER PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
         category TEXT,
         purchase_date TEXT,
         cost REAL DEFAULT 0,
         residual_value REAL DEFAULT 0,
         status TEXT DEFAULT 'Active'
-    );
+    )
     """)
 
 
@@ -37,8 +40,11 @@ def financial_kpis(conn):
     expenses_paid = scalar(conn, "SELECT COALESCE(SUM(paid),0) FROM expenses") or 0
     ar = scalar(conn, "SELECT COALESCE(SUM(total - paid),0) FROM invoices") or 0
     ap = scalar(conn, "SELECT COALESCE(SUM(amount - paid),0) FROM expenses") or 0
+    # Stock valuation (pharmacy)
     stock_val = scalar(conn, "SELECT COALESCE(SUM(stock * unit_price),0) FROM medicines") or 0
+    # Fixed assets
     fixed = scalar(conn, "SELECT COALESCE(SUM(cost),0) FROM assets WHERE status='Active'") or 0
+    # GL-style cashbook: credits (payments) - debits (expense payments)
     gl_credits = cash_in
     gl_debits = expenses_paid
     gl_balance = gl_credits - gl_debits
@@ -92,7 +98,7 @@ def pnl_summary(conn):
 
 def balance_sheet(conn):
     k = financial_kpis(conn)
-    equity = k["net_profit"]
+    equity = k["net_profit"]  # simplified retained surplus
     liabilities = k["accounts_payable"]
     return {
         "assets": {
@@ -118,7 +124,9 @@ def balance_sheet(conn):
 def gl_summary(conn):
     ensure_finance_tables(conn)
     k = financial_kpis(conn)
+    # Trial balance style rollup
     heads = []
+    # Patient receipts (credits)
     receipts = rows(
         conn,
         "SELECT COALESCE(method,'Cash') channel, COUNT(*) cnt, SUM(amount) total FROM payments GROUP BY COALESCE(method,'Cash')",
@@ -131,6 +139,7 @@ def gl_summary(conn):
             "debits": 0,
             "net": r["total"] or 0,
         })
+    # Expenses (debits)
     exps = rows(
         conn,
         "SELECT category, COUNT(*) cnt, SUM(paid) paid, SUM(amount) total FROM expenses GROUP BY category",
@@ -146,6 +155,7 @@ def gl_summary(conn):
     channels = []
     for r in receipts:
         channels.append({"channel": r["channel"], "inflows": r["total"] or 0, "outflows": 0, "net": r["total"] or 0})
+    # Simple outflow split by method on expenses
     exp_methods = rows(
         conn,
         "SELECT COALESCE(method,'Cash') channel, SUM(paid) total FROM expenses WHERE paid>0 GROUP BY COALESCE(method,'Cash')",
