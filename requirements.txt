@@ -1,3 +1,4 @@
 # Core HMS server uses only the Python standard library (sqlite3, http.server, json, hashlib).
 # Optional SDK for Gemini Interactions API (server also has a built-in zero-dep HTTPS client):
 google-genai>=1.0.0
+psycopg2-binary>=2.9.0
