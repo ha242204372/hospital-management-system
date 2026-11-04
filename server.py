@@ -125,8 +125,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def static(self, path):
         if path in ("/", "", "/index.html"):
-            tpl = os.path.join(TEMPLATES_DIR, "index.html")
-            full = tpl if os.path.isfile(tpl) else os.path.join(STATIC_DIR, "index.html")
+            candidates = [
+                os.path.join(TEMPLATES_DIR, "index.html"),
+                os.path.join(STATIC_DIR, "index.html"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "views", "templates", "index.html"),
+            ]
+            full = next((c for c in candidates if os.path.isfile(c)), candidates[0])
         else:
             rel = path.lstrip("/").replace("static/", "", 1)
             full = os.path.normpath(os.path.join(STATIC_DIR, rel))
@@ -138,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 full = alt_map.get(rel, full)
         if not os.path.isfile(full):
-            return self._send(404, b"Not found", "text/plain")
+            return self._send(404, f"Not found: {path} -> {full}".encode(), "text/plain")
         with open(full, "rb") as f:
             self._send(200, f.read(), mimetypes.guess_type(full)[0] or "application/octet-stream")
 
