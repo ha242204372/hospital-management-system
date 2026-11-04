@@ -79,3 +79,5 @@ table.t{border-collapse:collapse;width:100%}
 .chip.active,.chip:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
 .pager{display:flex;justify-content:space-between;align-items:center;padding:10px 4px;font-size:12.5px;color:var(--muted)}
 @media(max-width:860px){.sidebar{position:fixed;z-index:30;left:-250px;transition:.25s}.sidebar.open{left:0}.menu{display:block}.form{grid-template-columns:1fr}.view{padding:14px}#clock{display:none}}
+
+.logo img{width:36px;height:36px;display:block}
