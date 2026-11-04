@@ -323,6 +323,43 @@ class Handler(BaseHTTPRequestHandler):
             if role not in ("Admin", "Accountant"):
                 raise ApiError(403, "Not permitted")
             return balance_sheet(conn)
+
+        if path == "/api/inventory/alerts":
+            from app.models import db as db_mod
+            exp_expr = "(CURRENT_DATE + INTERVAL '90 days')::date" if getattr(db_mod, "USE_POSTGRES", False) else "date('now','+90 day')"
+            low = rows(conn, "SELECT id, name, stock, reorder_level, expiry_date, unit_price FROM medicines WHERE stock<=reorder_level ORDER BY stock")
+            exp = rows(conn, f"SELECT id, name, stock, reorder_level, expiry_date, unit_price FROM medicines WHERE expiry_date::date<={exp_expr} ORDER BY expiry_date" if getattr(db_mod, "USE_POSTGRES", False) else "SELECT id, name, stock, reorder_level, expiry_date, unit_price FROM medicines WHERE expiry_date<=date('now','+90 day') ORDER BY expiry_date")
+            return {"low_stock": low, "expiring": exp}
+
+        m = re.fullmatch(r"/api/admissions/(\d+)/summary", path)
+        if m and method == "GET":
+            aid = int(m.group(1))
+            adm = one(conn, """SELECT a.*, p.name patient, p.mrn, p.gender, p.dob, p.allergies, d.name doctor, w.name ward, b.bed_no
+                FROM admissions a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id
+                JOIN beds b ON b.id=a.bed_id JOIN wards w ON w.id=b.ward_id WHERE a.id=?""", (aid,))
+            if not adm:
+                raise ApiError(404, "Admission not found")
+            labs = rows(conn, "SELECT t.name test, o.result, o.status FROM lab_orders o JOIN lab_tests t ON t.id=o.test_id WHERE o.patient_id=? ORDER BY o.id DESC LIMIT 10", (adm["patient_id"],))
+            rxs = rows(conn, "SELECT medicine, dosage, frequency, duration, instructions FROM prescriptions WHERE patient_id=? ORDER BY id DESC LIMIT 10", (adm["patient_id"],))
+            s = get_settings(conn)
+            html = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>Discharge Summary</title>
+            <style>body{{font-family:sans-serif;margin:40px}} h1{{margin:0}} table{{border-collapse:collapse;width:100%}} td,th{{border:1px solid #ccc;padding:6px;text-align:left}}</style></head>
+            <body><h1>{s.get('hospital_name','Hospital')}</h1><p>{s.get('address','')}</p>
+            <h2>Discharge Summary</h2>
+            <p><b>Patient:</b> {adm['patient']} ({adm['mrn']}) &nbsp; <b>Gender:</b> {adm.get('gender') or '—'} &nbsp; <b>DOB:</b> {adm.get('dob') or '—'}</p>
+            <p><b>Allergies:</b> {adm.get('allergies') or 'None'}</p>
+            <p><b>Admitted:</b> {adm['admit_date']} &nbsp; <b>Discharged:</b> {adm.get('discharge_date') or '—'} &nbsp; <b>Ward:</b> {adm['ward']} Bed {adm['bed_no']}</p>
+            <p><b>Doctor:</b> {adm['doctor']}</p>
+            <h3>Diagnosis</h3><p>{adm.get('diagnosis') or '—'}</p>
+            <h3>Recent Labs</h3><table><tr><th>Test</th><th>Result</th><th>Status</th></tr>
+            {''.join(f"<tr><td>{l['test']}</td><td>{l.get('result') or '—'}</td><td>{l['status']}</td></tr>" for l in labs) or '<tr><td colspan=3>None</td></tr>'}
+            </table>
+            <h3>Prescriptions</h3><table><tr><th>Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th></tr>
+            {''.join(f"<tr><td>{r['medicine']}</td><td>{r.get('dosage') or ''}</td><td>{r.get('frequency') or ''}</td><td>{r.get('duration') or ''}</td></tr>" for r in rxs) or '<tr><td colspan=4>None</td></tr>'}
+            </table>
+            <p style='margin-top:40px'>_________________________<br>Doctor signature</p>
+            <script>window.print()</script></body></html>"""
+            return (html.encode(), {"Content-Type": "text/html; charset=utf-8"})
         if path == "/api/accounts/gl":
             if role not in ("Admin", "Accountant"):
                 raise ApiError(403, "Not permitted")
