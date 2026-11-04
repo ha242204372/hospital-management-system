@@ -72,11 +72,24 @@ async function renderInventoryAlerts() {
   let d; try { d = await api("/inventory/alerts"); } catch (e) { return fail(e); }
   const tbl = (rows, cols) => `<table class="mini"><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]])}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length}" class="muted">None</td></tr>`}</table>`;
   $("#view").innerHTML = `
+    <div style="margin-bottom:12px"><button class="btn sm primary" id="aiForecastBtn">✨ AI Reorder Forecast</button></div>
+    <div id="aiForecastOut" class="card hidden" style="margin-bottom:12px"></div>
     <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
       <div class="card"><h4>⚠️ Low stock (${d.low_stock.length})</h4>${tbl(d.low_stock, [["name","Medicine"],["stock","Stock"],["reorder_level","Reorder at"],["expiry_date","Expiry"]])}</div>
       <div class="card"><h4>⏳ Expiring within 90 days (${d.expiring.length})</h4>${tbl(d.expiring, [["name","Medicine"],["stock","Stock"],["expiry_date","Expiry"],["unit_price","Price"]])}</div>
     </div>`;
 }
+
+
+  $("#aiForecastBtn")?.addEventListener("click", async () => {
+    const out = $("#aiForecastOut");
+    out.classList.remove("hidden");
+    out.innerHTML = "✨ Generating reorder forecast…";
+    try {
+      const r = await api("/ai/inventory-forecast", { method: "POST", body: {} });
+      out.innerHTML = `<h4>AI Reorder Forecast</h4><pre style="white-space:pre-wrap">${esc(r.forecast)}</pre><div class="muted small">${esc(r.source)}</div>`;
+    } catch (e) { out.innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+  });
 
 async function renderAccounts() {
   $("#view").innerHTML = "Loading…";
@@ -1413,6 +1426,7 @@ async function renderGeminiHub() {
         <button type="button" class="btn sm primary" id="triageToSoapBtn">🩺 Draft Full SOAP &amp; Rx from Triage</button>
         <button type="button" class="btn sm" id="triageToRxBtn">💊 Check Drug Interactions</button>
         <button type="button" class="btn sm" id="triagePrintBtn">🖨 Print Emergency Triage Sheet</button>
+        <button type="button" class="btn sm" id="aiCodingBtn">🏷️ AI Coding</button>
       </div>`;
       renderMlPredictionBox(mlPred, $("#triageMlBox"), $("#soapF")?.patient_id?.value);
       $("#triageToSoapBtn").onclick = () => {
