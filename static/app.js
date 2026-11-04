@@ -244,6 +244,16 @@ async function renderDashboard() {
     ${kp("💊", "#fdf0d3", k.low_stock + " / " + k.expiring, "Low stock / expiring ≤90d", can("medicines") && "medicines")}
   </div>
   ${d.finance ? `
+  <div class="card" style="margin:16px 0;padding:12px 16px">
+    <b>🔄 Patient workflow:</b>
+    <span style="margin-left:8px">Register</span> →
+    <span>Appointment</span> →
+    <span>Consultation</span> →
+    <span>Lab / Pharmacy</span> →
+    <span>Invoice</span> →
+    <span>Admit / Discharge</span>
+    <span class="muted" style="margin-left:12px">· See WORKFLOW.md for full path</span>
+  </div>
   <h3 style="margin:18px 0 8px">📊 Financial Overview</h3>
   <div class="grid kpis">
     ${kp("📈", "#e1f5ec", money(d.finance.accrued_revenue), "Total Accrued Revenue (Gross Billed)", "accounts")}
