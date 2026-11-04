@@ -580,3 +580,48 @@ def ai_executive_briefing(kpis, extra_context, question=None, previous_interacti
         "source": "Built-in Hospital Analytics Advisor (configure GEMINI_API_KEY for live Gemini multi-turn chat)",
     }
 
+
+
+def ai_clinical_coding(diagnosis, notes="", model=None):
+    """Suggest ICD-style codes from diagnosis and notes."""
+    prompt = f"Diagnosis: {diagnosis}\nNotes: {notes}\nSuggest 1-3 likely ICD-10 style codes with short descriptions. Format as bullet list."
+    sys_inst = "You are a clinical coding assistant. Return concise ICD-10 style suggestions only. Do not invent patient data."
+    res = call_gemini_interaction(prompt, system_instruction=sys_inst, model=model, thinking_level="low")
+    if res and res.get("text"):
+        return {"codes": res["text"], "source": f"Gemini ({res['model']})"}
+    # Fallback
+    return {"codes": f"- R69: Illness, unspecified (from: {diagnosis[:60]})", "source": "Rule-based fallback"}
+
+
+def ai_discharge_narrative(admission, labs=None, prescriptions=None, model=None):
+    """Generate a polished discharge summary narrative."""
+    labs = labs or []
+    prescriptions = prescriptions or []
+    prompt = f"""Patient: {admission.get('patient')} MRN {admission.get('mrn')}
+Admitted: {admission.get('admit_date')} Discharged: {admission.get('discharge_date')}
+Ward: {admission.get('ward')} Bed: {admission.get('bed_no')}
+Doctor: {admission.get('doctor')}
+Diagnosis: {admission.get('diagnosis')}
+Allergies: {admission.get('allergies') or 'None'}
+Labs: {labs}
+Prescriptions: {prescriptions}
+Write a concise professional discharge summary with: Hospital Course, Discharge Diagnosis, Medications, Follow-up instructions."""
+    sys_inst = "You are a hospital discharge summary writer. Be factual, concise, and professional."
+    res = call_gemini_interaction(prompt, system_instruction=sys_inst, model=model, thinking_level="low")
+    if res and res.get("text"):
+        return {"narrative": res["text"], "source": f"Gemini ({res['model']})"}
+    return {"narrative": f"Patient {admission.get('patient')} admitted {admission.get('admit_date')} for {admission.get('diagnosis')}. Discharged {admission.get('discharge_date') or 'pending'}. Follow up as advised.", "source": "Template fallback"}
+
+
+def ai_inventory_forecast(medicines, model=None):
+    """Suggest reorder quantities."""
+    prompt = f"Medicines low or expiring: {medicines}\nFor each, suggest a practical reorder quantity and priority (High/Medium/Low). Keep it short."
+    sys_inst = "You are a hospital pharmacy inventory advisor. Be practical and concise."
+    res = call_gemini_interaction(prompt, system_instruction=sys_inst, model=model, thinking_level="low")
+    if res and res.get("text"):
+        return {"forecast": res["text"], "source": f"Gemini ({res['model']})"}
+    lines = []
+    for m in (medicines or [])[:8]:
+        qty = max(10, (m.get("reorder_level") or 10) * 2)
+        lines.append(f"- {m.get('name')}: reorder ~{qty} (priority High if stock <= reorder)")
+    return {"forecast": "\n".join(lines) or "No critical items.", "source": "Rule-based fallback"}
