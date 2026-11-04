@@ -1152,7 +1152,7 @@ async function renderGeminiHub() {
 
   $("#view").innerHTML = `
   <div class="card" style="margin-bottom:16px;overflow:hidden;padding:0">
-    <img src="/static/images/hospital-banner.svg" alt="Hospital" style="width:100%;height:140px;object-fit:cover;display:block" onerror="this.style.display='none'">
+    <img src="/static/images/hospital-banner.svg" alt="Hospital" style="width:100%;height:72px;object-fit:cover;display:block" onerror="this.style.display='none'">
   </div>
   <div class="card hero-banner">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
