@@ -1,19 +1,10 @@
 """Database connection, relational schema DDL, query helpers, and billing helpers."""
 import sqlite3
 import datetime as dt
-import os
 from app.config import DB_PATH
 
-try:
-    import psycopg2
-    import psycopg2.extras
-    HAS_PSYCOPG2 = True
-except ImportError:
-    HAS_PSYCOPG2 = False
-
+# Active DB file path (can be overridden by tests via server.DB or db.ACTIVE_DB)
 ACTIVE_DB = DB_PATH
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-USE_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
@@ -97,6 +88,18 @@ def today():
     return dt.date.today().isoformat()
 
 
+
+import os
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_PSYCOPG2 = True
+except ImportError:
+    HAS_PSYCOPG2 = False
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+USE_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
+
 def connect(db_path=None):
     if USE_POSTGRES:
         if not HAS_PSYCOPG2:
@@ -104,17 +107,17 @@ def connect(db_path=None):
         c = psycopg2.connect(DATABASE_URL)
         c.autocommit = False
         return c
+    # SQLite fallback
     c = sqlite3.connect(db_path or ACTIVE_DB)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
     return c
 
-
 def _adapt_sql(sql):
+    """Convert SQLite ? placeholders to PostgreSQL %s when needed."""
     if USE_POSTGRES:
         return sql.replace("?", "%s")
     return sql
-
 
 def _exec(conn, sql, args=()):
     sql = _adapt_sql(sql)
@@ -124,7 +127,6 @@ def _exec(conn, sql, args=()):
             return cur
     return conn.execute(sql, args)
 
-
 def rows(conn, sql, args=()):
     sql = _adapt_sql(sql)
     if USE_POSTGRES:
@@ -132,7 +134,6 @@ def rows(conn, sql, args=()):
             cur.execute(sql, args)
             return [dict(r) for r in cur.fetchall()]
     return [dict(r) for r in conn.execute(sql, args).fetchall()]
-
 
 def one(conn, sql, args=()):
     sql = _adapt_sql(sql)
@@ -144,7 +145,6 @@ def one(conn, sql, args=()):
     r = conn.execute(sql, args).fetchone()
     return dict(r) if r else None
 
-
 def scalar(conn, sql, args=()):
     sql = _adapt_sql(sql)
     if USE_POSTGRES:
@@ -155,9 +155,9 @@ def scalar(conn, sql, args=()):
     r = conn.execute(sql, args).fetchone()
     return (r[0] or 0) if r else 0
 
-
 def audit(conn, user, action, detail):
-    _exec(conn, "INSERT INTO audit_log(user,action,detail) VALUES(?,?,?)", (user["username"] if user else "system", action, detail))
+    col = '"user"' if USE_POSTGRES else "user"
+    _exec(conn, f"INSERT INTO audit_log({col},action,detail) VALUES(?,?,?)", (user["username"] if user else "system", action, detail))
 
 
 def recompute(conn, inv_id):
