@@ -1,4 +1,4 @@
-/* MediCare HMS - single page frontend (vanilla JS) */
+/* VizMedCare HMS - single page frontend (vanilla JS) */
 const $ = (s, e = document) => e.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 let CURRENCY = localStorage.getItem("hms_currency") || "PKR";
@@ -28,7 +28,7 @@ function applyBranding(cfg) {
     CURRENCY = cfg.currency;
     localStorage.setItem("hms_currency", cfg.currency);
   }
-  const hName = cfg.hospital_name || "MediCare General Hospital";
+  const hName = cfg.hospital_name || "VizMedCare";
   const logo = cfg.logo_icon || "✚";
   const tag = cfg.tagline || "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing";
   document.title = hName + " — HMS";
@@ -921,7 +921,7 @@ async function localAiBriefing(question) {
     }
   } else {
     reply = [
-      `MediCare General Hospital — Executive Daily Briefing`,
+      `VizMedCare — Executive Daily Briefing`,
       `1. Capacity & Inpatient Flow: Bed occupancy is at ${occ}% (${k.beds_occupied}/${k.beds_total} beds) with ${k.admitted} active admissions and ${k.appointments_today} outpatient appointments scheduled today across ${k.doctors} active doctors.`,
       `2. Diagnostics Throughput: ${k.pending_labs} lab orders are currently in Ordered or Sample Collected status — prioritize STAT hematology and biochemistry panels.`,
       `3. Pharmacy Supply Chain: ${k.low_stock} formulary items are below reorder level and ${k.expiring} batches expire within 90 days (${lowNames || "all clear"}).`,
@@ -1474,7 +1474,7 @@ async function renderGeminiHub() {
       $("#triagePrintBtn").onclick = () => {
         const hi = META?.settings || {};
         const w = window.open("", "_blank", "width=760,height=860");
-        w.document.write(`<title>Emergency Triage Protocol</title><body style="font-family:sans-serif;max-width:680px;margin:30px auto"><div style="border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px"><h1 style="margin:0">${esc(hi.logo_icon || "✚")} ${esc(META?.hospital || "MediCare General Hospital")}</h1><div style="color:#555;font-size:13px">Emergency Triage &amp; Stat Medication Sheet</div></div><p><b>Age/Gender:</b> ${esc(fd.age || "—")} / ${esc(fd.gender || "—")} · <b>Vitals:</b> ${esc(fd.vitals || "—")}<br><b>Presenting Symptoms:</b> ${esc(fd.symptoms || "")}</p><p><b>Acuity:</b> ${esc(r.urgency)} (ESI-${esc(r.esi_level)}) · <b>Department:</b> ${esc(r.recommended_department)}</p><h3>💊 Emergency &amp; First-Line Treatment Medicines</h3><ul>${(r.emergency_medications || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul><h3>🚑 Immediate Bedside Stabilization</h3><ul>${(r.immediate_interventions || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul><h3>🧠 ML Detected Lab Tests</h3><ul>${(mlPred.predicted_tests || []).filter(t => t.recommended).map(t => `<li><b>${esc(t.test_name)}</b> (${t.confidence_pct}% confidence · ${esc(t.priority)} · ${money(t.price || 0)})</li>`).join("")}</ul><p style="color:#b91c1c"><b>Red Flags:</b> ${(r.red_flags || []).map(esc).join("; ")}</p></body>`);
+        w.document.write(`<title>Emergency Triage Protocol</title><body style="font-family:sans-serif;max-width:680px;margin:30px auto"><div style="border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px"><h1 style="margin:0">${esc(hi.logo_icon || "✚")} ${esc(META?.hospital || "VizMedCare")}</h1><div style="color:#555;font-size:13px">Emergency Triage &amp; Stat Medication Sheet</div></div><p><b>Age/Gender:</b> ${esc(fd.age || "—")} / ${esc(fd.gender || "—")} · <b>Vitals:</b> ${esc(fd.vitals || "—")}<br><b>Presenting Symptoms:</b> ${esc(fd.symptoms || "")}</p><p><b>Acuity:</b> ${esc(r.urgency)} (ESI-${esc(r.esi_level)}) · <b>Department:</b> ${esc(r.recommended_department)}</p><h3>💊 Emergency &amp; First-Line Treatment Medicines</h3><ul>${(r.emergency_medications || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul><h3>🚑 Immediate Bedside Stabilization</h3><ul>${(r.immediate_interventions || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul><h3>🧠 ML Detected Lab Tests</h3><ul>${(mlPred.predicted_tests || []).filter(t => t.recommended).map(t => `<li><b>${esc(t.test_name)}</b> (${t.confidence_pct}% confidence · ${esc(t.priority)} · ${money(t.price || 0)})</li>`).join("")}</ul><p style="color:#b91c1c"><b>Red Flags:</b> ${(r.red_flags || []).map(esc).join("; ")}</p></body>`);
         w.document.close(); w.print();
       };
     } catch (err) { out.textContent = err.message; }
@@ -1676,7 +1676,7 @@ async function fallbackHospitalSetup() {
   ]);
   const saved = JSON.parse(localStorage.getItem("hms_local_settings") || "null") || {};
   const settings = {
-    hospital_name: saved.hospital_name || META?.hospital || "MediCare General Hospital",
+    hospital_name: saved.hospital_name || META?.hospital || "VizMedCare",
     tagline: saved.tagline || "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing",
     logo_icon: saved.logo_icon || "✚",
     currency: saved.currency || CURRENCY || "PKR",
@@ -1694,7 +1694,7 @@ async function fallbackHospitalSetup() {
   return {
     settings,
     presets: [
-      { id: "medicare", hospital_name: "MediCare General Hospital", tagline: "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing", logo_icon: "✚", currency: "PKR", address: "Main Boulevard, Gulberg III, Lahore, Pakistan", phone: "+92-42-111-222-333", emergency_phone: "1122 / +92-42-111-911-911", email: "info@medicare-hospital.pk", website: "www.medicare-hospital.pk", tax_id: "NTN-8492015-7", mrn_prefix: "MRN", invoice_prefix: "INV", invoice_footer: "Thank you for choosing MediCare General Hospital.", default_theme: "indigo" },
+      { id: "medicare", hospital_name: "VizMedCare", tagline: "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing", logo_icon: "✚", currency: "PKR", address: "Main Boulevard, Gulberg III, Lahore, Pakistan", phone: "+92-42-111-222-333", emergency_phone: "1122 / +92-42-111-911-911", email: "info@medicare-hospital.pk", website: "www.medicare-hospital.pk", tax_id: "NTN-8492015-7", mrn_prefix: "MRN", invoice_prefix: "INV", invoice_footer: "Thank you for choosing VizMedCare.", default_theme: "indigo" },
       { id: "alshifa", hospital_name: "Al-Shifa International Hospital", tagline: "Tertiary Care & Multi-Specialty Medical Center", logo_icon: "🏥", currency: "PKR", address: "Sector H-8/4, Pitras Bukhari Road, Islamabad, Pakistan", phone: "+92-51-846-3000", emergency_phone: "+92-51-846-4646", email: "care@alshifa-international.pk", website: "www.alshifa-international.pk", tax_id: "NTN-4109283-1", mrn_prefix: "ASH", invoice_prefix: "ASH-INV", invoice_footer: "Al-Shifa International Hospital — Committed to Clinical Excellence.", default_theme: "emerald" },
       { id: "citycare", hospital_name: "City Care & Trauma Center", tagline: "24/7 Emergency, Cardiology, Surgery & Diagnostics", logo_icon: "⚕", currency: "PKR", address: "Shahrah-e-Faisal, Block 6 PECHS, Karachi, Pakistan", phone: "+92-21-3452-8800", emergency_phone: "1020 / +92-21-3452-8899", email: "admin@citycarekarachi.pk", website: "www.citycarekarachi.pk", tax_id: "NTN-7721904-9", mrn_prefix: "CCK", invoice_prefix: "CCK-BILL", invoice_footer: "City Care & Trauma Center · 24-Hour Emergency & Pharmacy Services.", default_theme: "sapphire" },
       { id: "children_maternity", hospital_name: "Noor Mother & Child Specialist Hospital", tagline: "Obstetrics, Gynecology, Neonatology & Pediatric Care", logo_icon: "🤱", currency: "PKR", address: "University Road, Hayatabad Phase 3, Peshawar, Pakistan", phone: "+92-91-582-4400", emergency_phone: "+92-91-582-4499", email: "info@noorhospital.pk", website: "www.noorhospital.pk", tax_id: "NTN-5591023-4", mrn_prefix: "NMC", invoice_prefix: "NMC-INV", invoice_footer: "Noor Mother & Child Specialist Hospital — Caring for Every Generation.", default_theme: "crimson" },
