@@ -96,7 +96,7 @@ def dashboard(conn):
         "pnl": pnl,
         "appointments_7d": [{"label": d[5:], "value": ap.get(d, 0)} for d in d7],
         "revenue_14d": [{"label": d[5:], "value": rv.get(d, 0)} for d in d14],
-        "wards": rows(conn, "SELECT w.name, COUNT(b.id) total, SUM(b.status='Occupied') occupied FROM wards w LEFT JOIN beds b ON b.ward_id=w.id GROUP BY w.id"),
+        "wards": rows(conn, "SELECT w.name, COUNT(b.id) total, SUM(CASE WHEN b.status='Occupied' THEN 1 ELSE 0 END) occupied FROM wards w LEFT JOIN beds b ON b.ward_id=w.id GROUP BY w.id"),
         "appointment_status": rows(conn, "SELECT status label, COUNT(*) value FROM appointments GROUP BY status"),
         "by_department": rows(conn, "SELECT COALESCE(dp.name,'—') label, COUNT(*) value FROM appointments a JOIN staff s ON s.id=a.doctor_id LEFT JOIN departments dp ON dp.id=s.department_id GROUP BY dp.id ORDER BY value DESC"),
         "invoice_status": rows(conn, "SELECT status label, COUNT(*) value FROM invoices GROUP BY status"),
