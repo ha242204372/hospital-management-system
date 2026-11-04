@@ -36,6 +36,19 @@ RES = {
         columns=[("date", "Date"), ("patient", "Patient"), ("doctor", "Doctor"), ("bp", "BP"), ("pulse", "Pulse"), ("diagnosis", "Diagnosis")],
         sql="SELECT e.*, p.name patient, d.name doctor FROM encounters e JOIN patients p ON p.id=e.patient_id JOIN staff d ON d.id=e.doctor_id ORDER BY e.date DESC, e.id DESC",
         read=["Admin", "Doctor", "Nurse", "Patient"], write=["Admin", "Doctor", "Nurse"], delete=["Admin"]),
+    "prescriptions": dict(
+        label="Prescriptions", icon="💊", group="Clinical", table="prescriptions",
+        fields=[F("patient_id", "Patient", "ref", ref="patients", required=True),
+                F("doctor_id", "Doctor", "ref", ref="doctors", required=True),
+                F("medicine", "Medicine / Drug", required=True),
+                F("dosage", "Dosage", required=True),
+                F("frequency", "Frequency", required=True),
+                F("duration", "Duration"),
+                F("instructions", "Instructions", "textarea"),
+                F("date", "Date", "date")],
+        columns=[("date", "Date"), ("patient", "Patient"), ("doctor", "Doctor"), ("medicine", "Medicine"), ("dosage", "Dosage"), ("frequency", "Frequency"), ("duration", "Duration")],
+        sql="SELECT r.*, p.name patient, d.name doctor FROM prescriptions r JOIN patients p ON p.id=r.patient_id LEFT JOIN staff d ON d.id=r.doctor_id ORDER BY r.id DESC",
+        read=["Admin", "Doctor", "Nurse", "Pharmacist", "Patient"], write=["Admin", "Doctor"], delete=["Admin"]),
     "admissions": dict(
         label="Admissions (IPD)", icon="🛏️", group="Clinical", table="admissions",
         fields=[F("patient_id", "Patient", "ref", ref="patients", required=True), F("doctor_id", "Attending doctor", "ref", ref="doctors", required=True),
@@ -45,7 +58,7 @@ RES = {
         sql="SELECT a.*, p.name patient, d.name doctor, w.name ward, b.bed_no FROM admissions a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id "
             "JOIN beds b ON b.id=a.bed_id JOIN wards w ON w.id=b.ward_id ORDER BY (a.status='Admitted') DESC, a.admit_date DESC",
         read=["Admin", "Doctor", "Nurse", "Receptionist", "Patient"], write=["Admin", "Doctor", "Nurse", "Receptionist"], delete=["Admin"],
-        actions=[dict(key="discharge", label="Discharge", when=dict(status="Admitted"))], no_edit_when=dict(status="Discharged")),
+        actions=[dict(key="discharge", label="Discharge", when=dict(status="Admitted")), dict(key="summary", label="Summary", when=dict(status="Discharged"))], no_edit_when=dict(status="Discharged")),
     "wards": dict(
         label="Wards & Beds", icon="🏥", group="Clinical", table="wards",
         fields=[F("name", "Ward name", required=True), F("type", "Type", "select", options=["General", "Private", "ICU", "Emergency", "Maternity", "Pediatric"]),
