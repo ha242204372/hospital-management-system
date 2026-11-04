@@ -66,6 +66,18 @@ async function showLogin() {
 $("#loginForm").onsubmit = async e => {
   e.preventDefault(); const f = new FormData(e.target);
   try { await api("/login", { method: "POST", body: Object.fromEntries(f) }); $("#loginErr").textContent = ""; e.target.reset(); 
+
+async function renderInventoryAlerts() {
+  $("#view").innerHTML = "Loading…";
+  let d; try { d = await api("/inventory/alerts"); } catch (e) { return fail(e); }
+  const tbl = (rows, cols) => `<table class="mini"><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]])}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${cols.length}" class="muted">None</td></tr>`}</table>`;
+  $("#view").innerHTML = `
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card"><h4>⚠️ Low stock (${d.low_stock.length})</h4>${tbl(d.low_stock, [["name","Medicine"],["stock","Stock"],["reorder_level","Reorder at"],["expiry_date","Expiry"]])}</div>
+      <div class="card"><h4>⏳ Expiring within 90 days (${d.expiring.length})</h4>${tbl(d.expiring, [["name","Medicine"],["stock","Stock"],["expiry_date","Expiry"],["unit_price","Price"]])}</div>
+    </div>`;
+}
+
 async function renderAccounts() {
   $("#view").innerHTML = "Loading…";
   let fin, gl;
@@ -155,6 +167,9 @@ async function boot() {
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
   if (META.user.role === "Admin" || META.user.role === "Accountant") {
     h += `<div class="nav" data-go="accounts"><span>💳</span>Accounts & Finance</div>`;
+  if (META.user.role === "Admin" || META.user.role === "Pharmacist") {
+    h += `<div class="nav" data-go="inventory_alerts"><span>⚠️</span>Inventory Alerts</div>`;
+  }
   }
   if (META.user.role === "Admin") {
     h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
@@ -170,6 +185,7 @@ function go(key) {
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
   if (key === "accounts") { $("#pageTitle").textContent = "💳 Accounts & Finance Hub"; return renderAccounts(); }
+  if (key === "inventory_alerts") { $("#pageTitle").textContent = "⚠️ Inventory Alerts"; return renderInventoryAlerts(); }
   if (key === "gemini_ai") { $("#pageTitle").textContent = "✨ Gemini AI Clinical & Operations Hub"; return renderGeminiHub(); }
   if (key === "reports") { $("#pageTitle").textContent = "Reports & Analytics"; return renderReports(); }
   if (key === "settings") { $("#pageTitle").textContent = "⚙️ Hospital Setup & Master Data"; return renderSettings(); }
@@ -440,6 +456,7 @@ async function renderTable(res) {
       else if (a === "profile") openProfile(id);
       else if (a === "invoice") openInvoice(id, load);
       else if (a === "discharge") { if (confirm("Discharge this patient and bill bed charges?")) { const r = await api(`/admissions/${id}/discharge`, { method: "POST" }); toast(`Discharged. ${r.days} day(s) billed: ${money(r.amount)}`); load(); } }
+        else if (a === "summary") { window.open(`/api/admissions/${id}/summary`, "_blank"); }
       else if (a === "appt-done" || a === "appt-cancel") {
         const nextSt = a === "appt-done" ? "Completed" : "Cancelled";
         await api(`/appointments/${id}/status`, { method: "POST", body: { status: nextSt } }).catch(async () => {
