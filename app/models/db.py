@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 """
 
 DEFAULT_SETTINGS = {
-    "hospital_name": "MediCare General Hospital",
+    "hospital_name": "VizMedCare",
     "tagline": "Hospital Management System · EHR · IPD · Lab · Pharmacy · Billing",
     "logo_icon": "✚",
     "currency": "PKR",
