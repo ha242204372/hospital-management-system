@@ -16,7 +16,7 @@ RES = {
                 F("allergies", "Allergies"), F("address", "Address", "textarea"),
                 F("emergency_contact", "Emergency contact"), F("emergency_phone", "Emergency phone")],
         columns=[("mrn", "MRN"), ("name", "Name"), ("gender", "Gender"), ("age", "Age"), ("phone", "Phone"), ("blood_group", "Blood"), ("allergies", "Allergies")],
-        sql="SELECT p.*, CASE WHEN dob IS NULL OR dob='' THEN NULL ELSE CAST((julianday('now')-julianday(dob))/365.25 AS INT) END age FROM patients p ORDER BY id DESC",
+        sql="SELECT p.*, CASE WHEN dob IS NULL OR dob='' THEN NULL ELSE CAST((CURRENT_DATE - dob::date)/365.25 AS INT) END age FROM patients p ORDER BY id DESC" if __import__('app.models.db', fromlist=['USE_POSTGRES']).USE_POSTGRES else "SELECT p.*, CASE WHEN dob IS NULL OR dob='' THEN NULL ELSE CAST((julianday('now')-julianday(dob))/365.25 AS INT) END age FROM patients p ORDER BY id DESC",
         read=ALL, write=["Admin", "Receptionist", "Doctor", "Nurse"], delete=["Admin"], profile=True),
     "appointments": dict(
         label="Appointments", icon="📅", group="Front Desk", table="appointments",
