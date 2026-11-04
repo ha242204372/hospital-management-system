@@ -194,7 +194,7 @@ async function boot() {
   const logo = META.settings?.logo_icon || "✚";
   const groups = {};
   META.resources.forEach(r => (groups[r.group] ||= []).push(r));
-  let h = `<div class="brand"><div class="logo">${esc(logo)}</div>${esc(META.hospital)}</div>`;
+  let h = `<div class="brand"><div class="logo"><img src="/static/images/logo.svg" alt=""></div>${esc(META.hospital)}</div>`;
   h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
   h += `<div class="nav" data-go="opd_queue"><span>🎫</span>OPD Queue</div>`;
   if (META.user.role === "Admin") {
@@ -1151,6 +1151,9 @@ async function renderGeminiHub() {
   const mva = ds.missing_value_audit || {};
 
   $("#view").innerHTML = `
+  <div class="card" style="margin-bottom:16px;overflow:hidden;padding:0">
+    <img src="/static/images/hospital-banner.svg" alt="Hospital" style="width:100%;height:140px;object-fit:cover;display:block" onerror="this.style.display='none'">
+  </div>
   <div class="card hero-banner">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <div>
