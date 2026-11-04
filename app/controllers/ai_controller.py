@@ -118,6 +118,43 @@ def handle_ai_route(conn, method, path, user, body_fn):
         except RuntimeError as e:
             raise ApiError(502, str(e))
 
+
+    if path == "/api/ai/coding" and method == "POST":
+        b = body_fn()
+        try:
+            out = gemini_ai.ai_clinical_coding(b.get("diagnosis",""), b.get("notes",""), model=b.get("model"))
+            audit(conn, user, "ai_coding", (b.get("diagnosis") or "")[:60])
+            return out
+        except RuntimeError as e:
+            raise ApiError(502, str(e))
+
+    if path == "/api/ai/discharge-narrative" and method == "POST":
+        b = body_fn()
+        aid = int(b.get("admission_id") or 0)
+        if not aid:
+            raise ApiError(400, "admission_id required")
+        adm = one(conn, """SELECT a.*, p.name patient, p.mrn, p.allergies, d.name doctor, w.name ward, b.bed_no
+            FROM admissions a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id
+            JOIN beds b ON b.id=a.bed_id JOIN wards w ON w.id=b.ward_id WHERE a.id=?""", (aid,))
+        if not adm:
+            raise ApiError(404, "Admission not found")
+        labs = rows(conn, "SELECT t.name test, o.result FROM lab_orders o JOIN lab_tests t ON t.id=o.test_id WHERE o.patient_id=? ORDER BY o.id DESC LIMIT 8", (adm["patient_id"],))
+        rxs = rows(conn, "SELECT medicine, dosage, frequency FROM prescriptions WHERE patient_id=? ORDER BY id DESC LIMIT 8", (adm["patient_id"],))
+        try:
+            out = gemini_ai.ai_discharge_narrative(adm, labs, rxs, model=b.get("model"))
+            audit(conn, user, "ai_discharge", f"admission #{aid}")
+            return out
+        except RuntimeError as e:
+            raise ApiError(502, str(e))
+
+    if path == "/api/ai/inventory-forecast" and method == "POST":
+        meds = rows(conn, "SELECT name, stock, reorder_level, expiry_date FROM medicines WHERE stock<=reorder_level OR expiry_date<=date('now','+90 day') ORDER BY stock LIMIT 12")
+        try:
+            out = gemini_ai.ai_inventory_forecast(meds, model=body_fn().get("model"))
+            audit(conn, user, "ai_inventory", f"{len(meds)} items")
+            return out
+        except RuntimeError as e:
+            raise ApiError(502, str(e))
     if path == "/api/ai/briefing" and method == "POST":
         b = body_fn()
         dash = dashboard(conn)
