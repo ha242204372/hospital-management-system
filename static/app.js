@@ -67,6 +67,29 @@ $("#loginForm").onsubmit = async e => {
   e.preventDefault(); const f = new FormData(e.target);
   try { await api("/login", { method: "POST", body: Object.fromEntries(f) }); $("#loginErr").textContent = ""; e.target.reset(); 
 
+
+async function renderOpdQueue() {
+  $("#view").innerHTML = "Loading…";
+  let d; try { d = await api("/queue/today"); } catch (e) { return fail(e); }
+  const rows = d.queue || [];
+  const cards = rows.map((r, i) => `
+    <div class="card" style="padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <b style="font-size:18px">#${i+1}</b>
+        <span style="margin-left:12px">${esc(r.patient)}</span>
+        <span class="muted"> · ${esc(r.doctor)}</span>
+        <div class="muted small">${esc(r.time || "—")} · ${esc(r.visit_type || "In-person")} · ${esc(r.reason || "")}</div>
+      </div>
+      <span class="badge">${esc(r.status)}</span>
+    </div>`).join("") || '<div class="muted">No scheduled appointments today.</div>';
+  $("#view").innerHTML = `
+    <div style="margin-bottom:12px"><b>Today's OPD Queue</b> <span class="muted">(${d.date})</span>
+      <button class="btn sm" id="refreshQueue" style="margin-left:12px">↻ Refresh</button>
+    </div>
+    ${cards}`;
+  $("#refreshQueue").onclick = () => renderOpdQueue();
+}
+
 async function renderInventoryAlerts() {
   $("#view").innerHTML = "Loading…";
   let d; try { d = await api("/inventory/alerts"); } catch (e) { return fail(e); }
@@ -173,6 +196,7 @@ async function boot() {
   META.resources.forEach(r => (groups[r.group] ||= []).push(r));
   let h = `<div class="brand"><div class="logo">${esc(logo)}</div>${esc(META.hospital)}</div>`;
   h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
+  h += `<div class="nav" data-go="opd_queue"><span>🎫</span>OPD Queue</div>`;
   if (META.user.role === "Admin") {
     h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup &amp; Master Data</div>`;
   }
@@ -197,6 +221,7 @@ function go(key) {
   current = key; location.hash = key;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
+  if (key === "opd_queue") { $("#pageTitle").textContent = "🎫 OPD Queue"; return renderOpdQueue(); }
   if (key === "accounts") { $("#pageTitle").textContent = "💳 Accounts & Finance Hub"; return renderAccounts(); }
   if (key === "inventory_alerts") { $("#pageTitle").textContent = "⚠️ Inventory Alerts"; return renderInventoryAlerts(); }
   if (key === "gemini_ai") { $("#pageTitle").textContent = "✨ Gemini AI Clinical & Operations Hub"; return renderGeminiHub(); }
