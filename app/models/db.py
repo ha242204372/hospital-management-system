@@ -1,10 +1,19 @@
 """Database connection, relational schema DDL, query helpers, and billing helpers."""
 import sqlite3
 import datetime as dt
+import os
 from app.config import DB_PATH
 
-# Active DB file path (can be overridden by tests via server.DB or db.ACTIVE_DB)
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_PSYCOPG2 = True
+except ImportError:
+    HAS_PSYCOPG2 = False
+
 ACTIVE_DB = DB_PATH
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+USE_POSTGRES = DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL,
@@ -89,47 +98,82 @@ def today():
 
 
 def connect(db_path=None):
+    if USE_POSTGRES:
+        if not HAS_PSYCOPG2:
+            raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
+        c = psycopg2.connect(DATABASE_URL)
+        c.autocommit = False
+        return c
     c = sqlite3.connect(db_path or ACTIVE_DB)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys=ON")
     return c
 
 
+def _adapt_sql(sql):
+    if USE_POSTGRES:
+        return sql.replace("?", "%s")
+    return sql
+
+
+def _exec(conn, sql, args=()):
+    sql = _adapt_sql(sql)
+    if USE_POSTGRES:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            return cur
+    return conn.execute(sql, args)
+
+
 def rows(conn, sql, args=()):
+    sql = _adapt_sql(sql)
+    if USE_POSTGRES:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, args)
+            return [dict(r) for r in cur.fetchall()]
     return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
 
 def one(conn, sql, args=()):
+    sql = _adapt_sql(sql)
+    if USE_POSTGRES:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, args)
+            r = cur.fetchone()
+            return dict(r) if r else None
     r = conn.execute(sql, args).fetchone()
     return dict(r) if r else None
 
 
 def scalar(conn, sql, args=()):
+    sql = _adapt_sql(sql)
+    if USE_POSTGRES:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            r = cur.fetchone()
+            return (r[0] or 0) if r else 0
     r = conn.execute(sql, args).fetchone()
     return (r[0] or 0) if r else 0
 
 
 def audit(conn, user, action, detail):
-    conn.execute(
-        "INSERT INTO audit_log(user,action,detail) VALUES(?,?,?)",
-        (user["username"] if user else "system", action, detail),
-    )
+    _exec(conn, "INSERT INTO audit_log(user,action,detail) VALUES(?,?,?)", (user["username"] if user else "system", action, detail))
 
 
 def recompute(conn, inv_id):
     total = scalar(conn, "SELECT SUM(amount) FROM invoice_items WHERE invoice_id=?", (inv_id,))
     paid = scalar(conn, "SELECT SUM(amount) FROM payments WHERE invoice_id=?", (inv_id,))
     status = "Paid" if total > 0 and paid >= total - 0.001 else ("Partial" if paid > 0 else "Unpaid")
-    conn.execute("UPDATE invoices SET total=?, paid=?, status=? WHERE id=?", (total, paid, status, inv_id))
+    _exec(conn, "UPDATE invoices SET total=?, paid=?, status=? WHERE id=?", (total, paid, status, inv_id))
 
 
 def new_invoice(conn, patient_id, date=None, notes=None):
     n = scalar(conn, "SELECT MAX(id) FROM invoices") + 1
     pfx = (get_settings(conn).get("invoice_prefix") or "INV").strip().rstrip("-")
-    cur = conn.execute(
-        "INSERT INTO invoices(number,patient_id,date,notes) VALUES(?,?,?,?)",
-        (f"{pfx}-{n:05d}", patient_id, date or today(), notes),
-    )
+    cur = _exec(conn, "INSERT INTO invoices(number,patient_id,date,notes) VALUES(?,?,?,?)",
+        (f"{pfx}-{n:05d}", patient_id, date or today(), notes))
+    if USE_POSTGRES:
+        return cur.fetchone()[0] if cur.description else None
     return cur.lastrowid
 
 
@@ -140,6 +184,6 @@ def add_charge(conn, patient_id, desc, amount):
         (patient_id,),
     )
     inv_id = inv["id"] if inv else new_invoice(conn, patient_id)
-    conn.execute("INSERT INTO invoice_items(invoice_id,description,amount) VALUES(?,?,?)", (inv_id, desc, amount))
+    _exec(conn, "INSERT INTO invoice_items(invoice_id,description,amount) VALUES(?,?,?)", (inv_id, desc, amount))
     recompute(conn, inv_id)
     return inv_id
