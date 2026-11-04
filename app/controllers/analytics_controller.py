@@ -2,6 +2,7 @@
 import datetime as dt
 from app.config import ApiError, HOSPITAL_NAME
 from app.models.db import rows, one, scalar, today, get_settings
+from app.controllers.accounts_controller import financial_kpis, balance_sheet, pnl_summary
 
 
 def invoice_detail(conn, id_):
@@ -83,8 +84,14 @@ def dashboard(conn):
     ap = {r["date"]: r["c"] for r in rows(conn, "SELECT date, COUNT(*) c FROM appointments WHERE date>=? GROUP BY date", (d7[0],))}
     d14 = days_back(14)
     rv = {r["date"]: r["s"] for r in rows(conn, "SELECT date, SUM(amount) s FROM payments WHERE date>=? GROUP BY date", (d14[0],))}
+    fin = financial_kpis(conn)
+    bs = balance_sheet(conn)
+    pnl = pnl_summary(conn)
     return {
         "kpis": k,
+        "finance": fin,
+        "balance_sheet": bs,
+        "pnl": pnl,
         "appointments_7d": [{"label": d[5:], "value": ap.get(d, 0)} for d in d7],
         "revenue_14d": [{"label": d[5:], "value": rv.get(d, 0)} for d in d14],
         "wards": rows(conn, "SELECT w.name, COUNT(b.id) total, SUM(b.status='Occupied') occupied FROM wards w LEFT JOIN beds b ON b.ward_id=w.id GROUP BY w.id"),
