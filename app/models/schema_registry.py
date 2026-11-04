@@ -22,6 +22,7 @@ RES = {
         label="Appointments", icon="📅", group="Front Desk", table="appointments",
         fields=[F("patient_id", "Patient", "ref", ref="patients", required=True), F("doctor_id", "Doctor", "ref", ref="doctors", required=True),
                 F("date", "Date", "date", required=True), F("time", "Time", "time"), F("reason", "Reason"),
+                F("visit_type", "Visit type", "select", options=["In-person", "Telemedicine"], default="In-person"),
                 F("status", "Status", "select", options=["Scheduled", "Completed", "Cancelled", "No-show"], default="Scheduled")],
         columns=[("date", "Date"), ("time", "Time"), ("patient", "Patient"), ("doctor", "Doctor"), ("department", "Department"), ("reason", "Reason"), ("status", "Status")],
         sql="SELECT a.*, p.name patient, d.name doctor, dp.name department FROM appointments a JOIN patients p ON p.id=a.patient_id "
@@ -49,6 +50,19 @@ RES = {
         columns=[("date", "Date"), ("patient", "Patient"), ("doctor", "Doctor"), ("medicine", "Medicine"), ("dosage", "Dosage"), ("frequency", "Frequency"), ("duration", "Duration")],
         sql="SELECT r.*, p.name patient, d.name doctor FROM prescriptions r JOIN patients p ON p.id=r.patient_id LEFT JOIN staff d ON d.id=r.doctor_id ORDER BY r.id DESC",
         read=["Admin", "Doctor", "Nurse", "Pharmacist", "Patient"], write=["Admin", "Doctor"], delete=["Admin"]),
+    "mar": dict(
+        label="Medication Admin (MAR)", icon="💉", group="Clinical", table="mar",
+        fields=[F("patient_id", "Patient", "ref", ref="patients", required=True),
+                F("medicine", "Medicine", required=True),
+                F("dose", "Dose", required=True),
+                F("route", "Route", "select", options=["Oral", "IV", "IM", "SC", "Topical", "Inhaled"], default="Oral"),
+                F("scheduled_time", "Scheduled time"),
+                F("given_time", "Given time"),
+                F("status", "Status", "select", options=["Scheduled", "Given", "Held", "Refused"], default="Scheduled"),
+                F("notes", "Notes", "textarea")],
+        columns=[("scheduled_time", "Scheduled"), ("patient", "Patient"), ("medicine", "Medicine"), ("dose", "Dose"), ("route", "Route"), ("status", "Status"), ("given_time", "Given")],
+        sql="SELECT m.*, p.name patient FROM mar m JOIN patients p ON p.id=m.patient_id ORDER BY m.id DESC",
+        read=["Admin", "Doctor", "Nurse"], write=["Admin", "Nurse", "Doctor"], delete=["Admin"]),
     "admissions": dict(
         label="Admissions (IPD)", icon="🛏️", group="Clinical", table="admissions",
         fields=[F("patient_id", "Patient", "ref", ref="patients", required=True), F("doctor_id", "Attending doctor", "ref", ref="doctors", required=True),
