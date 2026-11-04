@@ -64,6 +64,8 @@ def days_back(n):
 
 def dashboard(conn):
     t = today()
+    from app.models import db as db_mod
+    exp_expr = "(CURRENT_DATE + INTERVAL '90 days')" if getattr(db_mod, "USE_POSTGRES", False) else "date('now','+90 day')"
     month = t[:7]
     k = {
         "patients": scalar(conn, "SELECT COUNT(*) FROM patients"),
@@ -76,7 +78,7 @@ def dashboard(conn):
         "revenue_month": scalar(conn, "SELECT SUM(amount) FROM payments WHERE date LIKE ?", (month + "%",)),
         "outstanding": scalar(conn, "SELECT SUM(total-paid) FROM invoices"),
         "low_stock": scalar(conn, "SELECT COUNT(*) FROM medicines WHERE stock<=reorder_level"),
-        "expiring": scalar(conn, "SELECT COUNT(*) FROM medicines WHERE expiry_date<=date('now','+90 day')"),
+        "expiring": scalar(conn, f"SELECT COUNT(*) FROM medicines WHERE expiry_date<={exp_expr}"),
         "pending_labs": scalar(conn, "SELECT COUNT(*) FROM lab_orders WHERE status!='Completed'"),
         "doctors": scalar(conn, "SELECT COUNT(*) FROM staff WHERE role='Doctor' AND status='Active'"),
     }
@@ -100,7 +102,7 @@ def dashboard(conn):
         "invoice_status": rows(conn, "SELECT status label, COUNT(*) value FROM invoices GROUP BY status"),
         "upcoming": rows(conn, "SELECT a.date, a.time, p.name patient, d.name doctor, a.status FROM appointments a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id WHERE a.date>=? AND a.status='Scheduled' ORDER BY a.date, a.time LIMIT 8", (t,)),
         "recent_admissions": rows(conn, "SELECT a.admit_date, p.name patient, w.name ward, b.bed_no, a.status FROM admissions a JOIN patients p ON p.id=a.patient_id JOIN beds b ON b.id=a.bed_id JOIN wards w ON w.id=b.ward_id ORDER BY a.id DESC LIMIT 6"),
-        "low_stock_list": rows(conn, "SELECT name, stock, reorder_level, expiry_date FROM medicines WHERE stock<=reorder_level OR expiry_date<=date('now','+90 day') ORDER BY stock LIMIT 6"),
+        "low_stock_list": rows(conn, f"SELECT name, stock, reorder_level, expiry_date FROM medicines WHERE stock<=reorder_level OR expiry_date<={exp_expr} ORDER BY stock LIMIT 6"),
     }
 
 
