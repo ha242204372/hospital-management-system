@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS invoice_items(id INTEGER PRIMARY KEY, invoice_id INTE
   description TEXT NOT NULL, amount REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS payments(id INTEGER PRIMARY KEY, invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
   amount REAL NOT NULL, method TEXT, date TEXT);
+CREATE TABLE IF NOT EXISTS prescriptions(id INTEGER PRIMARY KEY, patient_id INTEGER NOT NULL REFERENCES patients(id),
+  doctor_id INTEGER REFERENCES staff(id), encounter_id INTEGER, medicine TEXT NOT NULL, dosage TEXT, frequency TEXT,
+  duration TEXT, instructions TEXT, date TEXT);
 CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, at TEXT DEFAULT (datetime('now')), user TEXT, action TEXT, detail TEXT);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT);
 """
@@ -83,6 +86,22 @@ def save_settings(conn, data):
             )
     return get_settings(conn)
 
+
+
+def ensure_extra_tables(conn):
+    """Create tables added after initial migration."""
+    _exec(conn, """CREATE TABLE IF NOT EXISTS prescriptions (
+        id SERIAL PRIMARY KEY,
+        patient_id INTEGER NOT NULL REFERENCES patients(id),
+        doctor_id INTEGER REFERENCES staff(id),
+        encounter_id INTEGER,
+        medicine TEXT NOT NULL,
+        dosage TEXT,
+        frequency TEXT,
+        duration TEXT,
+        instructions TEXT,
+        date TEXT
+    )""")
 
 def today():
     return dt.date.today().isoformat()
