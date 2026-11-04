@@ -324,6 +324,13 @@ class Handler(BaseHTTPRequestHandler):
                 raise ApiError(403, "Not permitted")
             return balance_sheet(conn)
 
+
+        if path == "/api/queue/today":
+            t = today()
+            q = rows(conn, """SELECT a.id, a.time, a.reason, a.status, a.visit_type, p.name patient, p.mrn, d.name doctor
+                FROM appointments a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id
+                WHERE a.date=? AND a.status='Scheduled' ORDER BY a.time""", (t,))
+            return {"date": t, "queue": q}
         if path == "/api/inventory/alerts":
             from app.models import db as db_mod
             exp_expr = "(CURRENT_DATE + INTERVAL '90 days')::date" if getattr(db_mod, "USE_POSTGRES", False) else "date('now','+90 day')"
