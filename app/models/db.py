@@ -64,7 +64,7 @@ DEFAULT_SETTINGS = {
 
 
 def get_settings(conn):
-    conn.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+    _exec(conn, "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
     stored = {r["key"]: r["value"] for r in rows(conn, "SELECT key, value FROM settings")}
     out = dict(DEFAULT_SETTINGS)
     for k, v in stored.items():
@@ -74,10 +74,10 @@ def get_settings(conn):
 
 
 def save_settings(conn, data):
-    conn.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+    _exec(conn, "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
     for k in DEFAULT_SETTINGS:
         if k in data and data[k] is not None:
-            conn.execute(
+            _exec(conn,
                 "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (k, str(data[k]).strip()),
             )
