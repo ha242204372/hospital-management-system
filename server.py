@@ -340,6 +340,14 @@ class Handler(BaseHTTPRequestHandler):
                 WHERE a.date>? AND a.status='Scheduled' ORDER BY a.date, a.time LIMIT 15""", (t,))
             return {"date": t, "queue": q, "upcoming": upcoming}
 
+        m = re.fullmatch(r"/api/patients/(\d+)/clinical-context", path)
+        if m:
+            pid = int(m.group(1))
+            adm = rows(conn, "SELECT id, diagnosis, status, admit_date FROM admissions WHERE patient_id=? AND status='Admitted' ORDER BY id DESC LIMIT 1", (pid,))
+            enc = rows(conn, "SELECT date, diagnosis, bp, pulse, temperature, notes FROM encounters WHERE patient_id=? ORDER BY date DESC LIMIT 5", (pid,))
+            rx = rows(conn, "SELECT date, diagnosis, dosage, frequency FROM prescriptions WHERE patient_id=? ORDER BY id DESC LIMIT 5", (pid,))
+            return {"indoor": bool(adm), "admission": adm[0] if adm else None, "encounters": enc, "prescriptions": rx}
+
         if path == "/api/tokens" and method == "GET":
             t = today()
             return {"date": t, "tokens": rows(conn, "SELECT q.*, p.name patient, s.name doctor FROM queue_tokens q LEFT JOIN patients p ON p.id=q.patient_id LEFT JOIN staff s ON s.id=q.doctor_id WHERE q.date=? ORDER BY q.number", (t,))}
