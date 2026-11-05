@@ -1,3 +1,28 @@
+const DESKS = [
+  {name:"Reception", user:"reception", pass:"reception123", blurb:"Patients, appointments, OPD queue"},
+  {name:"Doctor", user:"doctor", pass:"doctor123", blurb:"EMR, prescriptions, AI copilot"},
+  {name:"Pharmacy", user:"pharmacy", pass:"pharmacy123", blurb:"Stock, dispense, expiry alerts"},
+  {name:"Laboratory", user:"lab", pass:"lab123", blurb:"Lab orders and results"},
+  {name:"Accounts", user:"accounts", pass:"accounts123", blurb:"Invoices, JazzCash, receipts"},
+  {name:"Nursing / IPD", user:"nurse", pass:"nurse123", blurb:"Beds, MAR, admissions"},
+  {name:"Admin", user:"admin", pass:"admin123", blurb:"Hospital setup and all desks"},
+  {name:"Patient", user:"patient", pass:"patient123", blurb:"Patient portal"},
+];
+function renderPortal() {
+  const g = document.getElementById("portalGrid");
+  if (!g) return;
+  g.innerHTML = DESKS.map(d => `<button type="button" class="desk" data-u="${d.user}" data-p="${d.pass}"><b>${d.name}</b><span>${d.blurb}</span></button>`).join("");
+  g.onclick = e => {
+    const b = e.target.closest(".desk");
+    if (!b) return;
+    document.querySelectorAll(".desk").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    const f = document.getElementById("loginForm");
+    f.username.value = b.dataset.u;
+    f.password.value = b.dataset.p;
+    document.getElementById("deskTitle").textContent = b.querySelector("b").textContent + " sign in";
+  };
+}
 /* VizMedCare HMS - single page frontend (vanilla JS) */
 const $ = (s, e = document) => e.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -55,7 +80,7 @@ function badge(v) { const c = GOOD.includes(v) ? "b-ok" : BAD.includes(v) ? "b-b
 const BADGE_COLS = new Set(["status"]);
 
 /* ---------- auth ---------- */
-async function showLogin() {
+async function showLogin() { renderPortal();
   $("#app").classList.add("hidden");
   $("#login").classList.remove("hidden");
   try {
