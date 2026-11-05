@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MediCare HMS — Entry-Point HTTP Server & Router (MVC Architecture).
+"""VizMedCare HMS — Entry-Point HTTP Server & Router (MVC Architecture).
 
 Directory Structure:
   app/
@@ -69,7 +69,7 @@ def init_db():
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MediCareHMS/2.0-MVC"
+    server_version = "VizMedCareHMS/2.0-MVC"
 
     def log_message(self, fmt, *args):
         pass
