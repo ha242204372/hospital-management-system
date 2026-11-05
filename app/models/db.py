@@ -116,6 +116,22 @@ def ensure_extra_tables(conn):
             nurse TEXT
         )""",
         "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS visit_type TEXT DEFAULT 'In-person'",
+        """CREATE TABLE IF NOT EXISTS queue_tokens (
+            id SERIAL PRIMARY KEY, patient_id INTEGER, doctor_id INTEGER,
+            date TEXT, number INTEGER, status TEXT DEFAULT 'waiting', created_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS doctor_share_rules (
+            id SERIAL PRIMARY KEY, doctor_id INTEGER, service TEXT, share_type TEXT, value REAL
+        )""",
+        """CREATE TABLE IF NOT EXISTS panels (
+            id SERIAL PRIMARY KEY, name TEXT, panel_type TEXT, discount REAL DEFAULT 0
+        )""",
+        """CREATE TABLE IF NOT EXISTS medicine_batches (
+            id SERIAL PRIMARY KEY, medicine_id INTEGER, batch_no TEXT, expiry TEXT, qty INTEGER, cost REAL
+        )""",
+        """CREATE TABLE IF NOT EXISTS message_log (
+            id SERIAL PRIMARY KEY, channel TEXT, to_addr TEXT, body TEXT, status TEXT, created_at TEXT
+        )""",
     ]
     for sql in stmts:
         try:
