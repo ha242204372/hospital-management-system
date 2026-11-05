@@ -1,4 +1,4 @@
-# MediCare HMS — Full-Stack Hospital Management System (MVC + Gemini AI Hub)
+# VizMedCare HMS — Full-Stack Hospital Management System (MVC + Gemini AI Hub)
 
 A full-stack, white-label Hospital Management System built with a **Python MVC REST backend + SQLite relational database** and an **interactive Single-Page Web Application (HTML5 / CSS3 / Vanilla JS + Canvas Charts + Multi-Theme Switcher)**.
 
@@ -77,7 +77,7 @@ hospital-management-system/
 
 1. **⚙️ Multi-Hospital White-Label Setup & Master Data (`#settings`)**
    - Configure **Hospital Name, Tagline, Logo Symbol, Currency (`PKR` default, or `USD`, `AED`, `SAR`, `GBP`, `EUR`), Default Color Theme, Patient MRN Prefix, Invoice Prefix, Tax/NTN Number, Address, Phone, and Printable Invoice Footer**.
-   - Includes **1-Click Hospital Profile Presets** (*MediCare General Hospital*, *Al-Shifa International Hospital*, *City Care & Trauma Center*, *Noor Mother & Child Specialist Hospital*).
+   - Includes **1-Click Hospital Profile Presets** (*VizMedCare*, *Al-Shifa International Hospital*, *City Care & Trauma Center*, *Noor Mother & Child Specialist Hospital*).
    - **Master Data Onboarding Tabs**:
      - **Doctors & Staff Quick-Add**: Add doctors/staff with consultation fees, auto-create departments, and create their login username/password in one step.
      - **Wards & Auto-Bed Generator**: Create a ward and auto-generate `1..N` numbered beds (e.g. `SW-01`..`SW-08`) in one click.
