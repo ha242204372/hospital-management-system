@@ -116,6 +116,13 @@ def ensure_extra_tables(conn):
             nurse TEXT
         )""",
         "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS visit_type TEXT DEFAULT 'In-person'",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS visit_type TEXT DEFAULT 'OPD (Outdoor)'",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS diagnosis TEXT",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS bp TEXT",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS pulse TEXT",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS temperature TEXT",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS history_note TEXT",
+        "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS medicine_id INTEGER",
         """CREATE TABLE IF NOT EXISTS queue_tokens (
             id SERIAL PRIMARY KEY, patient_id INTEGER, doctor_id INTEGER,
             date TEXT, number INTEGER, status TEXT DEFAULT 'waiting', created_at TEXT
