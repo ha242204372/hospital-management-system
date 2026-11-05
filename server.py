@@ -356,11 +356,23 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/rx/suggest" and method == "POST":
             b = self.body() or {}
             diagnosis = (b.get("diagnosis") or "").lower()
-            meds = rows(conn, "SELECT id, name, stock FROM medicines ORDER BY name")
-            hits = [m for m in meds if any(w in m["name"].lower() for w in diagnosis.split() if len(w) > 3)]
-            if not hits:
-                hits = meds[:5]
-            return {"suggestions": hits[:6], "note": "AI draft — doctor must review", "source": "catalog-match"}
+            meds = rows(conn, "SELECT id, name, stock, unit_price FROM medicines ORDER BY name")
+            words = [w for w in diagnosis.replace(",", " ").split() if len(w) > 2]
+            scored = []
+            for m in meds:
+                name = (m.get("name") or "").lower()
+                score = sum(1 for w in words if w in name)
+                if score:
+                    scored.append((score, m))
+            scored.sort(key=lambda x: -x[0])
+            hits = [m for _, m in scored[:8]]
+            if len(hits) < 4:
+                for m in meds:
+                    if m not in hits:
+                        hits.append(m)
+                    if len(hits) >= 6:
+                        break
+            return {"suggestions": hits, "note": "Multiple options — doctor must review", "source": "catalog-match"}
 
         if path == "/api/tokens" and method == "GET":
             t = today()
