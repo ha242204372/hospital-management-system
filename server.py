@@ -348,6 +348,42 @@ class Handler(BaseHTTPRequestHandler):
             rx = rows(conn, "SELECT date, diagnosis, dosage, frequency FROM prescriptions WHERE patient_id=? ORDER BY id DESC LIMIT 5", (pid,))
             return {"indoor": bool(adm), "admission": adm[0] if adm else None, "encounters": enc, "prescriptions": rx}
 
+        if path == "/api/rx/drugs":
+            q = (self.query.get("q") or [""])[0].strip().lower()
+            drugs = rows(conn, "SELECT * FROM drug_master ORDER BY brand")
+            if q:
+                drugs = [d for d in drugs if q in (d.get("brand") or "").lower() or q in (d.get("generic") or "").lower()]
+            return {"drugs": drugs[:30]}
+        if path == "/api/rx/templates":
+            tpls = rows(conn, "SELECT * FROM rx_template ORDER BY name")
+            for t in tpls:
+                t["items"] = rows(conn, "SELECT * FROM rx_template_item WHERE template_id=?", (t["id"],))
+            return {"templates": tpls}
+        if path == "/api/rx" and method == "POST":
+            b = self.body() or {}
+            import uuid
+            token = uuid.uuid4().hex[:10]
+            t = today()
+            _exec(conn, "INSERT INTO rx_header(patient_id, doctor_id, date, diagnosis, notes, status, follow_up, token) VALUES (?,?,?,?,?,?,?,?)",
+                  (b.get("patient_id"), b.get("doctor_id"), t, b.get("diagnosis"), b.get("notes"), "signed", b.get("follow_up"), token))
+            hdr = rows(conn, "SELECT id FROM rx_header ORDER BY id DESC LIMIT 1")
+            rid = hdr[0]["id"] if hdr else None
+            for it in b.get("items") or []:
+                _exec(conn, "INSERT INTO rx_item(rx_id, drug_id, dose, frequency, duration, quantity, route, timing, instructions) VALUES (?,?,?,?,?,?,?,?,?)",
+                      (rid, it.get("drug_id"), it.get("dose"), it.get("frequency"), it.get("duration"), it.get("quantity") or 1, it.get("route"), it.get("timing"), it.get("instructions")))
+            _exec(conn, "INSERT INTO rx_audit(rx_id, action, user_name, at) VALUES (?,?,?,?)", (rid, "signed", user.get("full_name"), t))
+            return {"id": rid, "token": token, "verify": "/rx/verify/" + token}
+        if path.startswith("/api/rx/verify/"):
+            token = path.rsplit("/", 1)[-1]
+            hdr = rows(conn, "SELECT h.*, p.name patient FROM rx_header h LEFT JOIN patients p ON p.id=h.patient_id WHERE h.token=?", (token,))
+            if not hdr:
+                return {"error": "not found"}
+            items = rows(conn, "SELECT i.*, d.brand, d.generic, d.strength FROM rx_item i LEFT JOIN drug_master d ON d.id=i.drug_id WHERE i.rx_id=?", (hdr[0]["id"],))
+            return {"rx": hdr[0], "items": items}
+        if path == "/api/rx/queue":
+            q = rows(conn, "SELECT h.*, p.name patient FROM rx_header h LEFT JOIN patients p ON p.id=h.patient_id WHERE h.status IN ('signed','partially_dispensed') ORDER BY h.id DESC")
+            return {"queue": q}
+
         if path == "/api/rx/search":
             q = (self.query.get("q") or [""])[0].strip()
             like = "%" + q + "%"
