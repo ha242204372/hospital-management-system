@@ -233,6 +233,7 @@ function go(key) {
   if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio", "accounts", "opd_queue", "inventory_alerts"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
   current = key; location.hash = key;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
+  $("#view").innerHTML = "";
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
   if (key === "opd_queue") { $("#pageTitle").textContent = "🎫 OPD Queue"; return renderOpdQueue(); }
   if (key === "accounts") { $("#pageTitle").textContent = "💳 Accounts & Finance Hub"; return renderAccounts(); }
