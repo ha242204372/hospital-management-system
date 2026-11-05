@@ -231,7 +231,11 @@ function go(key) {
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   $("#view").innerHTML = "";
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
-  if (key === "opd_queue") { $("#pageTitle").textContent = "🎫 OPD Queue"; return renderOpdQueue(); }
+  if (key === "opd_queue") {
+    $("#pageTitle").textContent = "OPD Queue";
+    $("#view").innerHTML = '<div class="card"><b>OPD Queue</b><p>Loading appointments…</p><button class="btn sm primary" onclick="go(\'appointments\')">Open Appointments</button></div>';
+    return renderOpdQueue();
+  }
   if (key === "accounts") { $("#pageTitle").textContent = "💳 Accounts & Finance Hub"; return renderAccounts(); }
   if (key === "inventory_alerts") { $("#pageTitle").textContent = "⚠️ Inventory Alerts"; return renderInventoryAlerts(); }
   if (key === "gemini_ai") { $("#pageTitle").textContent = "✨ Gemini AI Clinical & Operations Hub"; return renderGeminiHub(); }
