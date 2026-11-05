@@ -375,7 +375,7 @@ class Handler(BaseHTTPRequestHandler):
             return {"top_drugs": top, "by_doctor": by_doc}
 
         if path == "/api/rx/drugs":
-            q = (self.query.get("q") or [""])[0].strip().lower()
+            q = (qs.get("q") or [""])[0].strip().lower()
             drugs = rows(conn, "SELECT * FROM drug_master ORDER BY brand")
             if q:
                 drugs = [d for d in drugs if q in (d.get("brand") or "").lower() or q in (d.get("generic") or "").lower()]
@@ -411,7 +411,7 @@ class Handler(BaseHTTPRequestHandler):
             return {"queue": q}
 
         if path == "/api/rx/search":
-            q = (self.query.get("q") or [""])[0].strip()
+            q = (qs.get("q") or [""])[0].strip()
             like = "%" + q + "%"
             meds = rows(conn, "SELECT id, name, stock, unit_price FROM medicines WHERE name ILIKE ? OR ? = '' ORDER BY name LIMIT 20", (like, q)) if False else rows(conn, "SELECT id, name, stock, unit_price FROM medicines WHERE LOWER(name) LIKE LOWER(?) ORDER BY name LIMIT 20", (like,))
             return {"medicines": meds}
