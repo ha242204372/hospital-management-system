@@ -3,103 +3,96 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VizMedCare — Hospital Management System You Own</title>
-<meta name="description" content="White-label hospital management system with EMR, OPD, pharmacy, billing, and AI. You own the source code.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>VizMedCare — HMS for Pakistani Hospitals & Clinics</title>
+<meta name="description" content="Stop billing leakage. Cut OPD wait. White-label hospital system for Pakistan with EMR, pharmacy, thermal receipts, and AI. You own the code.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--brand:#0ea5e9;--ink:#0f172a;--muted:#64748b;--bg:#f8fafc;--card:#fff;--line:#e2e8f0}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:#fff}
+:root{--brand:#0ea5e9;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink)}
 a{color:inherit;text-decoration:none}
 .nav{display:flex;justify-content:space-between;align-items:center;padding:16px 8%;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:10}
-.logo{font-weight:800;font-size:20px;display:flex;align-items:center;gap:8px}
+.logo{font-weight:800;display:flex;align-items:center;gap:8px}
 .logo span{background:var(--brand);color:#fff;width:32px;height:32px;border-radius:8px;display:grid;place-items:center}
-.nav a{margin-left:18px;font-size:14px;color:var(--muted)}
-.btn{display:inline-block;background:var(--brand);color:#fff;padding:12px 20px;border-radius:10px;font-weight:600;border:0}
+.nav a{margin-left:16px;font-size:14px;color:var(--muted)}
+.btn{display:inline-block;background:#25D366;color:#fff;padding:12px 18px;border-radius:10px;font-weight:600}
+.btn.blue{background:var(--brand)}
 .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
-.hero{padding:72px 8% 48px;background:linear-gradient(180deg,#f0f9ff, #fff)}
-.hero h1{font-size:44px;line-height:1.15;margin:0 0 16px;max-width:760px}
+.hero{padding:64px 8% 40px;background:linear-gradient(180deg,#ecfeff,#fff)}
+.hero h1{font-size:42px;line-height:1.15;margin:0 0 14px;max-width:780px}
 .hero p{font-size:18px;color:var(--muted);max-width:640px}
-.cta{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap}
-.section{padding:56px 8%}
-.section h2{font-size:32px;margin:0 0 12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:24px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
-.card h3{margin:0 0 8px}
-.card p,.card li{color:var(--muted);font-size:14px;line-height:1.5}
+.cta{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+.section{padding:52px 8%}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:20px}
+.card{border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h3{margin:0 0 8px}.card p{color:var(--muted);font-size:14px;line-height:1.5}
 .price{font-size:28px;font-weight:800;color:var(--brand)}
-.footer{padding:28px 8%;border-top:1px solid var(--line);color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.badge{display:inline-block;background:#e0f2fe;color:#0369a1;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:12px}
-@media(max-width:700px){.hero h1{font-size:32px}}
+.badge{display:inline-block;background:#dcfce7;color:#166534;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:10px}
+.footer{padding:24px 8%;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+@media(max-width:700px){.hero h1{font-size:30px}}
 </style>
 </head>
 <body>
 <nav class="nav">
   <div class="logo"><span>✚</span> VizMedCare</div>
   <div>
-    <a href="#modules">Modules</a>
     <a href="#why">Why us</a>
+    <a href="#modules">Modules</a>
     <a href="#pricing">Pricing</a>
-    <a class="btn" href="#contact" style="margin-left:18px">Book a demo</a>
+    <a class="btn" href="https://wa.me/923001234567?text=Hi%20VizMedCare%2C%20I%20want%20a%2015-min%20demo%20for%20my%20hospital.">WhatsApp demo</a>
   </div>
 </nav>
 
 <header class="hero">
-  <div class="badge">White-label · You own the code</div>
-  <h1>Hospital system with AI. Ready to run, not a 3-month build.</h1>
-  <p>VizMedCare covers patients, OPD queue, EMR, IPD, lab, pharmacy, billing, and Gemini AI. Rebrand it for any clinic. No monthly lock-in.</p>
+  <div class="badge">Made for Pakistani hospitals · PKR · Thermal receipts</div>
+  <h1>Stop billing leakage. Cut OPD wait. Own the system.</h1>
+  <p>VizMedCare is a hospital system built for clinics in Pakistan. Every service and medicine is billed. Queue is digital. Receipts print on thermal printers. You get the source code — no monthly lock-in.</p>
   <div class="cta">
-    <a class="btn" href="#contact">Book a 15-min demo</a>
-    <a class="btn ghost" href="#pricing">See packages</a>
+    <a class="btn" href="https://wa.me/923001234567?text=Hi%20VizMedCare%2C%20I%20want%20a%2015-min%20demo%20for%20my%20hospital.">Book 15-min WhatsApp demo</a>
+    <a class="btn blue" href="#pricing">See packages</a>
   </div>
 </header>
 
-<section class="section" id="modules">
-  <h2>What is included</h2>
-  <p style="color:var(--muted)">One system for the full patient journey.</p>
-  <div class="grid">
-    <div class="card"><h3>Front desk</h3><p>Patient registration, appointments, and today’s OPD queue with token order.</p></div>
-    <div class="card"><h3>Clinical</h3><p>EMR consultations, prescriptions, medication admin (MAR), and discharge summary.</p></div>
-    <div class="card"><h3>IPD</h3><p>Admissions, wards, and bed board with occupancy.</p></div>
-    <div class="card"><h3>Diagnostics</h3><p>Lab orders, test catalog, and result tracking.</p></div>
-    <div class="card"><h3>Pharmacy</h3><p>Inventory, dispensing, low-stock and expiry alerts.</p></div>
-    <div class="card"><h3>Finance</h3><p>Invoices, payments, expenses, assets, P&L, and balance sheet.</p></div>
-    <div class="card"><h3>AI hub</h3><p>Gemini triage, clinical copilot, patient summary, Rx check, and coding.</p></div>
-    <div class="card"><h3>Roles & themes</h3><p>Admin, doctor, nurse, lab, pharmacy, accountant, patient. Multiple skins.</p></div>
-  </div>
-</section>
-
 <section class="section" id="why" style="background:var(--bg)">
-  <h2>Why VizMedCare</h2>
+  <h2>Why clinics choose VizMedCare</h2>
   <div class="grid">
-    <div class="card"><h3>You own it</h3><p>Full source code. SQLite to start, PostgreSQL when you grow. No vendor lock-in.</p></div>
-    <div class="card"><h3>AI included</h3><p>Triage, SOAP notes, Rx check, and inventory forecast built in. Not an add-on later.</p></div>
-    <div class="card"><h3>White-label</h3><p>Change hospital name, currency, theme, and prefixes. Sell it as your own product.</p></div>
-    <div class="card"><h3>Fast start</h3><p>Demo data included. Running locally in minutes. Deploy on your own server.</p></div>
+    <div class="card"><h3>Recover lost billing</h3><p>Consults, labs, beds, and pharmacy go on one invoice. Unrecorded charges stop leaking 15–20% of revenue.</p></div>
+    <div class="card"><h3>48-hour go-live</h3><p>Demo data included. We set hospital name, PKR, and staff logins. Reception and pharmacy can start in two days.</p></div>
+    <div class="card"><h3>Thermal receipts</h3><p>Print a narrow receipt for cash counters and local thermal printers. No A4 required.</p></div>
+    <div class="card"><h3>Made for Pakistan</h3><p>PKR, local address format, Cash / Card / Bank / JazzCash-style methods, English UI.</p></div>
+    <div class="card"><h3>You own the code</h3><p>Not a locked SaaS. Source on your server. SQLite now, PostgreSQL when you grow.</p></div>
+    <div class="card"><h3>AI included</h3><p>Gemini triage, clinical notes, Rx check, and coding. Not sold as a later add-on.</p></div>
   </div>
 </section>
 
-<section class="section" id="pricing">
+<section class="section" id="modules">
+  <h2>Modules</h2>
+  <div class="grid">
+    <div class="card"><h3>Reception</h3><p>Register patient, book appointment, run today’s OPD queue.</p></div>
+    <div class="card"><h3>Doctor</h3><p>EMR, prescription, AI copilot, discharge summary.</p></div>
+    <div class="card"><h3>IPD</h3><p>Admit, assign bed, track ward occupancy.</p></div>
+    <div class="card"><h3>Lab</h3><p>Order tests, enter results, bill automatically.</p></div>
+    <div class="card"><h3>Pharmacy</h3><p>Stock, dispense, low-stock and expiry alerts.</p></div>
+    <div class="card"><h3>Accounts</h3><p>Invoices, payments, P&L, cashbook, thermal receipt.</p></div>
+  </div>
+</section>
+
+<section class="section" id="pricing" style="background:var(--bg)">
   <h2>Packages</h2>
   <div class="grid">
-    <div class="card"><div class="price">$150</div><h3>Starter</h3><p>Source code, demo database, setup guide, demo logins. 3 days.</p></div>
-    <div class="card"><div class="price">$280</div><h3>Standard</h3><p>Branding, Gemini AI setup, PostgreSQL script, 2 revisions. 5 days.</p></div>
-    <div class="card"><div class="price">$450</div><h3>Premium</h3><p>White-label, deploy help, one extra module, 7 days support. 7 days.</p></div>
+    <div class="card"><div class="price">$150</div><h3>Starter</h3><p>Source, demo data, setup guide. You install. 3 days.</p></div>
+    <div class="card"><div class="price">$280</div><h3>Standard</h3><p>Branding for your hospital, AI setup, PostgreSQL, thermal receipts. 5 days.</p></div>
+    <div class="card"><div class="price">$450</div><h3>Go-live</h3><p>48-hour setup help, staff walkthrough, WhatsApp support for 7 days. 7 days.</p></div>
   </div>
 </section>
 
 <section class="section" id="contact" style="background:#0c4a6e;color:#fff">
-  <h2 style="color:#fff">See VizMedCare on your clinic</h2>
-  <p style="color:#bae6fd;max-width:560px">Tell me the hospital name and I will walk you through a live demo or deliver the source ready to rebrand.</p>
+  <h2 style="color:#fff">See it on your clinic</h2>
+  <p style="color:#bae6fd;max-width:560px">WhatsApp us the hospital name. We reply with a live walkthrough or a quote.</p>
   <div class="cta">
-    <a class="btn" href="mailto:info@vizmedcare.com">Email for a demo</a>
-    <a class="btn ghost" href="https://www.upwork.com" target="_blank">Hire on Upwork</a>
+    <a class="btn" href="https://wa.me/923001234567?text=Hi%20VizMedCare%2C%20I%20want%20a%20demo%20for%20my%20hospital.">Chat on WhatsApp</a>
   </div>
 </section>
 
-<footer class="footer">
-  <div>© 2026 VizMedCare · Hospital Management System</div>
-  <div>Patients · OPD · EMR · Lab · Pharmacy · Billing · AI</div>
-</footer>
+<footer class="footer">© 2026 VizMedCare · Built for Pakistani hospitals · You own the code</footer>
 </body>
 </html>
