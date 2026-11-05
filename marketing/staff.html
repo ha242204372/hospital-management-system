@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VizMedCare · Staff Portal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:980px;margin:0 auto;padding:48px 20px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.mark{width:36px;height:36px;border-radius:10px;background:#0ea5e9;color:#fff;display:grid;place-items:center;font-size:18px}
+.pill{font-size:12px;background:#dcfce7;color:#166534;padding:4px 10px;border-radius:999px}
+h1{font-size:34px;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:8px;min-height:160px}
+.card .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:18px}
+.card h3{margin:4px 0 0;font-size:16px}
+.card p{margin:0;color:var(--muted);font-size:13px;flex:1}
+.card a{align-self:flex-start;background:#0f172a;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;text-decoration:none}
+.foot{margin-top:28px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><div class="mark">✚</div> VizMedCare</div>
+    <div class="pill">Staff portal · Pakistan</div>
+  </div>
+  <h1>Choose your desk</h1>
+  <p class="sub">One hospital system. Each role opens only what that desk needs. Not a dark clone — a clear clinic floor.</p>
+  <div class="grid">
+    <div class="card"><div class="ic" style="background:#e0f2fe">🏥</div><h3>Reception</h3><p>Register patients, book appointments, run the OPD queue.</p><a href="/#appointments">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#dcfce7">🩺</div><h3>Doctor</h3><p>Consultations, prescriptions, AI copilot, discharge.</p><a href="/#encounters">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#fef3c7">💊</div><h3>Pharmacy</h3><p>Stock, dispense, expiry and low-stock alerts.</p><a href="/#medicines">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#ede9fe">🔬</div><h3>Laboratory</h3><p>Lab orders, test catalog, results.</p><a href="/#lab_orders">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#fee2e2">💳</div><h3>Accounts</h3><p>Invoices, JazzCash / Raast, thermal receipts.</p><a href="/#accounts">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#f1f5f9">🛏️</div><h3>IPD / Nursing</h3><p>Admissions, beds, medication admin (MAR).</p><a href="/#admissions">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#cffafe">✨</div><h3>AI Hub</h3><p>Triage, clinical notes, Rx check, coding.</p><a href="/#gemini_ai">Open desk</a></div>
+    <div class="card"><div class="ic" style="background:#fce7f3">⚙️</div><h3>Hospital setup</h3><p>Name, PKR, staff, wards, themes.</p><a href="/#settings">Open desk</a></div>
+  </div>
+  <p class="foot">VizMedCare · Internal staff portal · You own the code</p>
+</div>
+</body>
+</html>
