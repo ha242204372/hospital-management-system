@@ -6,6 +6,6 @@
     </linearGradient>
   </defs>
   <rect width="1200" height="200" fill="url(#g)"/>
-  <text x="60" y="110" font-family="Inter,Arial" font-size="42" fill="#fff" font-weight="700">MediCare General Hospital</text>
+  <text x="60" y="110" font-family="Inter,Arial" font-size="42" fill="#fff" font-weight="700">VizMedCare</text>
   <text x="60" y="150" font-family="Inter,Arial" font-size="18" fill="#e0f2fe">EHR · IPD · Lab · Pharmacy · Billing</text>
 </svg>
