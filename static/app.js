@@ -70,25 +70,27 @@ $("#loginForm").onsubmit = async e => {
 
 async function renderOpdQueue() {
   const view = document.getElementById("view");
-  view.innerHTML = '<div class="card">Loading queue…</div>';
+  view.innerHTML = '<div class="card"><b>OPD Queue</b><div class="muted">Loading appointments…</div></div>';
   let d = { date: "", queue: [], upcoming: [] };
   try {
     d = await api("/queue/today");
   } catch (e) {
-    view.innerHTML = '<div class="card"><b>Could not load queue</b><div class="muted">' + (e.message || e) + '</div></div>';
+    view.innerHTML = '<div class="card"><b>OPD Queue</b><div class="muted">Error: ' + (e.message || String(e)) + '</div><button class="btn sm" onclick="go(\'appointments\')">Open Appointments</button></div>';
     return;
   }
   const rows = d.queue || [];
-  let html = '<div style="margin-bottom:12px"><b>Today OPD Queue</b> <span class="muted">' + (d.date || "") + '</span> <span class="badge">' + rows.length + ' waiting</span> <button class="btn sm" id="refreshQueue">Refresh</button> <button class="btn sm primary" onclick="go(\'appointments\')">Book appointment</button></div>';
-  if (!rows.length) html += '<div class="card">No appointments scheduled for today.</div>';
+  const up = d.upcoming || [];
+  let html = '<div class="card" style="margin-bottom:12px"><b>Today OPD Queue</b> <span class="muted">' + (d.date || "") + '</span> <span class="badge">' + rows.length + ' waiting</span><div style="margin-top:10px"><button class="btn sm" id="refreshQueue">Refresh</button> <button class="btn sm primary" onclick="go(\'appointments\')">Book appointment</button></div></div>';
+  if (!rows.length) html += '<div class="card">No appointments for today. Upcoming ones are listed below.</div>';
   rows.forEach((r, i) => {
     html += '<div class="card" style="padding:12px;margin-bottom:8px"><b>#' + (i+1) + '</b> ' + (r.patient || "") + ' · ' + (r.doctor || "") + '<div class="muted small">' + (r.time || "—") + ' · ' + (r.reason || "") + '</div></div>';
   });
-  const up = d.upcoming || [];
   if (up.length) {
-    html += '<h4 style="margin:16px 0 8px">Upcoming appointments</h4><div class="tbl-wrap"><table><tr><th>Date</th><th>Time</th><th>Patient</th><th>Doctor</th><th>Reason</th></tr>';
+    html += '<div class="card"><b>Upcoming appointments</b><table style="width:100%;margin-top:8px"><tr><th>Date</th><th>Time</th><th>Patient</th><th>Doctor</th><th>Reason</th></tr>';
     up.forEach(r => { html += '<tr><td>' + (r.date || "") + '</td><td>' + (r.time || "") + '</td><td>' + (r.patient || "") + '</td><td>' + (r.doctor || "") + '</td><td>' + (r.reason || "") + '</td></tr>'; });
     html += '</table></div>';
+  } else if (!rows.length) {
+    html += '<div class="card muted">No upcoming scheduled appointments either. Book one from Appointments.</div>';
   }
   view.innerHTML = html;
   const btn = document.getElementById("refreshQueue");
