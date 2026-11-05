@@ -381,6 +381,16 @@ class Handler(BaseHTTPRequestHandler):
             _exec(conn, "INSERT INTO message_log(channel, to_addr, body, status, created_at) VALUES (?,?,?,?,?)",
                   (b.get("channel") or "whatsapp", b.get("to") or "", b.get("body") or "", "mock-sent", t))
             return {"status": "mock-sent"}
+        if path == "/api/portal/me":
+            pid = user.get("patient_id")
+            if not pid:
+                return {"patient": None, "appointments": [], "invoices": []}
+            appts = rows(conn, "SELECT date, time, reason, status FROM appointments WHERE patient_id=? ORDER BY date DESC LIMIT 10", (pid,))
+            invs = rows(conn, "SELECT number, date, total, paid, status FROM invoices WHERE patient_id=? ORDER BY date DESC LIMIT 10", (pid,))
+            return {"patient_id": pid, "appointments": appts, "invoices": invs}
+        if path == "/api/backup" and method == "POST":
+            return {"ok": True, "note": "Backup requested. On PostgreSQL run pg_dump. On SQLite copy database/hospital.db."}
+
         if path == "/api/branches":
             return {"branches": [{"id": 1, "name": "Main", "city": "Karachi"}]}
 
