@@ -348,6 +348,32 @@ class Handler(BaseHTTPRequestHandler):
             rx = rows(conn, "SELECT date, diagnosis, dosage, frequency FROM prescriptions WHERE patient_id=? ORDER BY id DESC LIMIT 5", (pid,))
             return {"indoor": bool(adm), "admission": adm[0] if adm else None, "encounters": enc, "prescriptions": rx}
 
+        if path == "/api/rx/check" and method == "POST":
+            b = self.body() or {}
+            pid = b.get("patient_id")
+            items = b.get("items") or []
+            warnings = []
+            allergies = rows(conn, "SELECT substance FROM patient_allergy WHERE patient_id=?", (pid,)) if pid else []
+            names = " ".join((i.get("brand") or "") + " " + (i.get("generic") or "") for i in items).lower()
+            for a in allergies:
+                if a.get("substance") and a["substance"].lower() in names:
+                    warnings.append("Allergy match: " + a["substance"])
+            if "ibuprofen" in names and "diclofenac" in names:
+                warnings.append("Duplicate NSAID therapy")
+            if "amoxicillin" in names and "augmentin" in names:
+                warnings.append("Duplicate penicillin")
+            return {"warnings": warnings, "note": "AI suggestion – doctor to verify"}
+        if path == "/api/rx/dispense" and method == "POST":
+            b = self.body() or {}
+            rid = b.get("rx_id")
+            _exec(conn, "UPDATE rx_header SET status='dispensed' WHERE id=?", (rid,))
+            _exec(conn, "INSERT INTO rx_audit(rx_id, action, user_name, at) VALUES (?,?,?,?)", (rid, "dispensed", user.get("full_name"), today()))
+            return {"ok": True, "status": "dispensed"}
+        if path == "/api/rx/reports":
+            top = rows(conn, "SELECT d.brand, COUNT(*) n FROM rx_item i LEFT JOIN drug_master d ON d.id=i.drug_id GROUP BY d.brand ORDER BY n DESC LIMIT 10")
+            by_doc = rows(conn, "SELECT doctor_id, COUNT(*) n FROM rx_header GROUP BY doctor_id")
+            return {"top_drugs": top, "by_doctor": by_doc}
+
         if path == "/api/rx/drugs":
             q = (self.query.get("q") or [""])[0].strip().lower()
             drugs = rows(conn, "SELECT * FROM drug_master ORDER BY brand")
