@@ -2,6 +2,7 @@
 import datetime as dt
 from app.config import ApiError, HOSPITAL_NAME
 from app.models.db import rows, one, scalar, today, get_settings
+from app.models import db as db_mod
 from app.controllers.accounts_controller import financial_kpis, balance_sheet, pnl_summary
 
 
@@ -64,7 +65,6 @@ def days_back(n):
 
 def dashboard(conn):
     t = today()
-    from app.models import db as db_mod
     exp_expr = "(CURRENT_DATE + INTERVAL '90 days')::date" if getattr(db_mod, "USE_POSTGRES", False) else "date('now','+90 day')"
     month = t[:7]
     k = {
