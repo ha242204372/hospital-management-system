@@ -69,37 +69,29 @@ $("#loginForm").onsubmit = async e => {
 
 
 async function renderOpdQueue() {
-  $("#view").innerHTML = '<div class="card">Loading queue…</div>';
-  let d;
+  const view = document.getElementById("view");
+  view.innerHTML = '<div class="card">Loading queue…</div>';
+  let d = { date: "", queue: [], upcoming: [] };
   try {
     d = await api("/queue/today");
   } catch (e) {
-    $("#view").innerHTML = `<div class="card"><b>Could not load queue</b><div class="muted">${esc(e.message || e)}</div></div>`;
+    view.innerHTML = '<div class="card"><b>Could not load queue</b><div class="muted">' + (e.message || e) + '</div></div>';
     return;
   }
   const rows = d.queue || [];
-  const cards = rows.length ? rows.map((r, i) => `
-    <div class="card" style="padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <b style="font-size:18px;color:var(--brand)">#${i+1}</b>
-        <span style="margin-left:12px;font-weight:600">${esc(r.patient)}</span>
-        <span class="muted"> · ${esc(r.doctor)}</span>
-        <div class="muted small">${esc(r.time || "—")} · ${esc(r.reason || "No reason")}</div>
-      </div>
-      <span class="badge">${esc(r.status)}</span>
-    </div>`).join("") : '<div class="card">No scheduled appointments for today. Book one from Appointments.</div>';
-  const upcoming = (d.upcoming || []).map(r => `<tr><td>${esc(r.date)}</td><td>${esc(r.time || "—")}</td><td>${esc(r.patient)}</td><td>${esc(r.doctor)}</td><td>${esc(r.reason || "")}</td></tr>`).join("");
-  $("#view").innerHTML = `
-    <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <b>Today's OPD Queue</b>
-      <span class="muted">${d.date}</span>
-      <span class="badge">${rows.length} waiting</span>
-      <button class="btn sm" id="refreshQueue">↻ Refresh</button>
-      <button class="btn sm primary" onclick="go('appointments')">＋ Book appointment</button>
-    </div>
-    ${cards}
-    ${upcoming ? `<h4 style="margin:18px 0 8px">Upcoming appointments</h4><div class="tbl-wrap"><table><tr><th>Date</th><th>Time</th><th>Patient</th><th>Doctor</th><th>Reason</th></tr>${upcoming}</table></div>` : ""}`;
-  const btn = $("#refreshQueue");
+  let html = '<div style="margin-bottom:12px"><b>Today OPD Queue</b> <span class="muted">' + (d.date || "") + '</span> <span class="badge">' + rows.length + ' waiting</span> <button class="btn sm" id="refreshQueue">Refresh</button> <button class="btn sm primary" onclick="go(\'appointments\')">Book appointment</button></div>';
+  if (!rows.length) html += '<div class="card">No appointments scheduled for today.</div>';
+  rows.forEach((r, i) => {
+    html += '<div class="card" style="padding:12px;margin-bottom:8px"><b>#' + (i+1) + '</b> ' + (r.patient || "") + ' · ' + (r.doctor || "") + '<div class="muted small">' + (r.time || "—") + ' · ' + (r.reason || "") + '</div></div>';
+  });
+  const up = d.upcoming || [];
+  if (up.length) {
+    html += '<h4 style="margin:16px 0 8px">Upcoming appointments</h4><div class="tbl-wrap"><table><tr><th>Date</th><th>Time</th><th>Patient</th><th>Doctor</th><th>Reason</th></tr>';
+    up.forEach(r => { html += '<tr><td>' + (r.date || "") + '</td><td>' + (r.time || "") + '</td><td>' + (r.patient || "") + '</td><td>' + (r.doctor || "") + '</td><td>' + (r.reason || "") + '</td></tr>'; });
+    html += '</table></div>';
+  }
+  view.innerHTML = html;
+  const btn = document.getElementById("refreshQueue");
   if (btn) btn.onclick = () => renderOpdQueue();
 }
 
