@@ -332,14 +332,12 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/queue/today":
             t = today()
-            q = rows(conn, """SELECT a.id, a.time, a.reason, a.status, p.name patient, p.mrn, d.name doctor
+            q = rows(conn, """SELECT a.id, a.date, a.time, a.reason, a.status, p.name patient, p.mrn, d.name doctor
                 FROM appointments a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id
                 WHERE a.date=? AND a.status='Scheduled' ORDER BY a.time""", (t,))
-            upcoming = []
-            if not q:
-                upcoming = rows(conn, """SELECT a.date, a.time, p.name patient, d.name doctor, a.reason
-                    FROM appointments a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id
-                    WHERE a.date>? AND a.status='Scheduled' ORDER BY a.date, a.time LIMIT 8""", (t,))
+            upcoming = rows(conn, """SELECT a.date, a.time, p.name patient, d.name doctor, a.reason, a.status
+                FROM appointments a JOIN patients p ON p.id=a.patient_id JOIN staff d ON d.id=a.doctor_id
+                WHERE a.date>? AND a.status='Scheduled' ORDER BY a.date, a.time LIMIT 15""", (t,))
             return {"date": t, "queue": q, "upcoming": upcoming}
 
         if path == "/api/inventory/alerts":
