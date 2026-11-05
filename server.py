@@ -340,6 +340,50 @@ class Handler(BaseHTTPRequestHandler):
                 WHERE a.date>? AND a.status='Scheduled' ORDER BY a.date, a.time LIMIT 15""", (t,))
             return {"date": t, "queue": q, "upcoming": upcoming}
 
+        if path == "/api/tokens" and method == "GET":
+            t = today()
+            return {"date": t, "tokens": rows(conn, "SELECT q.*, p.name patient, s.name doctor FROM queue_tokens q LEFT JOIN patients p ON p.id=q.patient_id LEFT JOIN staff s ON s.id=q.doctor_id WHERE q.date=? ORDER BY q.number", (t,))}
+        if path == "/api/tokens" and method == "POST":
+            b = self.body() or {}
+            t = today()
+            n = scalar(conn, "SELECT COALESCE(MAX(number),0)+1 FROM queue_tokens WHERE date=?", (t,)) or 1
+            _exec(conn, "INSERT INTO queue_tokens(patient_id, doctor_id, date, number, status, created_at) VALUES (?,?,?,?,?,?)",
+                  (b.get("patient_id"), b.get("doctor_id"), t, n, "waiting", t))
+            if getattr(__import__("app.models.db", fromlist=["db"]), "USE_POSTGRES", False):
+                conn.commit()
+            return {"number": n, "date": t}
+        if path == "/api/doctor-shares" and method == "GET":
+            return {"rules": rows(conn, "SELECT r.*, s.name doctor FROM doctor_share_rules r LEFT JOIN staff s ON s.id=r.doctor_id")}
+        if path == "/api/doctor-shares" and method == "POST":
+            b = self.body() or {}
+            _exec(conn, "INSERT INTO doctor_share_rules(doctor_id, service, share_type, value) VALUES (?,?,?,?)",
+                  (b.get("doctor_id"), b.get("service") or "Consultation", b.get("share_type") or "percent", b.get("value") or 0))
+            return {"ok": True}
+        if path == "/api/panels" and method == "GET":
+            return {"panels": rows(conn, "SELECT * FROM panels ORDER BY name")}
+        if path == "/api/panels" and method == "POST":
+            b = self.body() or {}
+            _exec(conn, "INSERT INTO panels(name, panel_type, discount) VALUES (?,?,?)", (b.get("name"), b.get("panel_type") or "corporate", b.get("discount") or 0))
+            return {"ok": True}
+        if path == "/api/pharmacy/batches" and method == "GET":
+            return {"batches": rows(conn, "SELECT b.*, m.name medicine FROM medicine_batches b LEFT JOIN medicines m ON m.id=b.medicine_id ORDER BY b.expiry")}
+        if path == "/api/pharmacy/batches" and method == "POST":
+            b = self.body() or {}
+            _exec(conn, "INSERT INTO medicine_batches(medicine_id, batch_no, expiry, qty, cost) VALUES (?,?,?,?,?)",
+                  (b.get("medicine_id"), b.get("batch_no"), b.get("expiry"), b.get("qty") or 0, b.get("cost") or 0))
+            return {"ok": True}
+        if path == "/api/fbr/submit" and method == "POST":
+            b = self.body() or {}
+            return {"mode": "sandbox", "fbr_invoice_no": "FBR-MOCK-%s" % (b.get("invoice_id") or "0"), "qr": "sandbox"}
+        if path == "/api/notify" and method == "POST":
+            b = self.body() or {}
+            t = today()
+            _exec(conn, "INSERT INTO message_log(channel, to_addr, body, status, created_at) VALUES (?,?,?,?,?)",
+                  (b.get("channel") or "whatsapp", b.get("to") or "", b.get("body") or "", "mock-sent", t))
+            return {"status": "mock-sent"}
+        if path == "/api/branches":
+            return {"branches": [{"id": 1, "name": "Main", "city": "Karachi"}]}
+
         if path == "/api/inventory/alerts":
             from app.models import db as db_mod
             exp_expr = "(CURRENT_DATE + INTERVAL '90 days')::date" if getattr(db_mod, "USE_POSTGRES", False) else "date('now','+90 day')"
