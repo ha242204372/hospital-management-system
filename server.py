@@ -348,6 +348,20 @@ class Handler(BaseHTTPRequestHandler):
             rx = rows(conn, "SELECT date, diagnosis, dosage, frequency FROM prescriptions WHERE patient_id=? ORDER BY id DESC LIMIT 5", (pid,))
             return {"indoor": bool(adm), "admission": adm[0] if adm else None, "encounters": enc, "prescriptions": rx}
 
+        if path == "/api/rx/search":
+            q = (self.query.get("q") or [""])[0].strip()
+            like = "%" + q + "%"
+            meds = rows(conn, "SELECT id, name, stock, unit_price FROM medicines WHERE name ILIKE ? OR ? = '' ORDER BY name LIMIT 20", (like, q)) if False else rows(conn, "SELECT id, name, stock, unit_price FROM medicines WHERE LOWER(name) LIKE LOWER(?) ORDER BY name LIMIT 20", (like,))
+            return {"medicines": meds}
+        if path == "/api/rx/suggest" and method == "POST":
+            b = self.body() or {}
+            diagnosis = (b.get("diagnosis") or "").lower()
+            meds = rows(conn, "SELECT id, name, stock FROM medicines ORDER BY name")
+            hits = [m for m in meds if any(w in m["name"].lower() for w in diagnosis.split() if len(w) > 3)]
+            if not hits:
+                hits = meds[:5]
+            return {"suggestions": hits[:6], "note": "AI draft — doctor must review", "source": "catalog-match"}
+
         if path == "/api/tokens" and method == "GET":
             t = today()
             return {"date": t, "tokens": rows(conn, "SELECT q.*, p.name patient, s.name doctor FROM queue_tokens q LEFT JOIN patients p ON p.id=q.patient_id LEFT JOIN staff s ON s.id=q.doctor_id WHERE q.date=? ORDER BY q.number", (t,))}
