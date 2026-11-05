@@ -689,8 +689,8 @@ async function openInvoice(id, done) {
     ${res.canWrite ? `<form id="itemF" class="form" style="margin-top:10px;grid-template-columns:2fr 1fr auto"><input name="description" placeholder="Add charge (e.g. Room service)" required><input name="amount" type="number" step="any" min="0" placeholder="Amount (${CURRENCY})" required><button class="btn">Add</button></form>` : ""}
     <div class="sec">Payments (${CURRENCY})</div>
     ${inv.payments.length ? miniTable([["date", "Date"], ["method", "Method"], ["amount", `Amount (${CURRENCY})`, money]], inv.payments) : '<span class="muted">No payments yet</span>'}
-    ${res.canWrite && bal > 0.001 ? `<form id="payF" class="form" style="margin-top:10px;grid-template-columns:1fr 1fr auto"><input name="amount" type="number" step="any" min="0" placeholder="Amount (${CURRENCY})" value="${bal.toFixed(2)}" required><select name="method"><option>Cash</option><option>Card</option><option>UPI</option><option>Insurance</option><option>Bank transfer</option></select><button class="btn primary">Record payment (${CURRENCY})</button></form>` : ""}
-    <div class="form-foot"><button class="btn" id="printBtn">🖨 Print</button><button class="btn" id="thermalBtn">🧾 Thermal receipt</button></div>`, true);
+    ${res.canWrite && bal > 0.001 ? `<form id="payF" class="form" style="margin-top:10px;grid-template-columns:1fr 1fr auto"><input name="amount" type="number" step="any" min="0" placeholder="Amount (${CURRENCY})" value="${bal.toFixed(2)}" required><select name="method"><option>Cash</option><option>Card</option><option>Bank transfer</option><option>JazzCash</option><option>EasyPaisa</option><option>Raast</option><option>Insurance</option></select><button class="btn primary">Record payment (${CURRENCY})</button></form>` : ""}
+    <div class="form-foot"><button class="btn" id="printBtn">🖨 Print</button><button class="btn" id="thermalBtn">🧾 Thermal receipt</button><button class="btn" id="waBtn" type="button">WhatsApp</button></div>`, true);
     const bind = (sel, fn) => { const f = $(sel); if (f) f.onsubmit = async e => { e.preventDefault(); try { render(await fn(Object.fromEntries(new FormData(f)))); done(); toast("Saved"); } catch (err) { fail(err); } }; };
     bind("#itemF", b => api(`/invoices/${id}/items`, { method: "POST", body: b }));
     bind("#payF", b => api(`/invoices/${id}/payments`, { method: "POST", body: b }));
@@ -701,6 +701,11 @@ async function openInvoice(id, done) {
       const items = inv.items.map(i => `<div style="display:flex;justify-content:space-between"><span>${esc(i.description)}</span><span>${money(i.amount)}</span></div>`).join("");
       w.document.write(`<title>Receipt ${esc(inv.number)}</title><body style="font-family:monospace;width:280px;margin:8px;font-size:12px"><div style="text-align:center"><b>${esc(hi.hospital_name || META.hospital)}</b><br>${esc(hi.address || "")}<br>${esc(hi.phone || "")}</div><hr><div>${esc(inv.number)} · ${esc(inv.date)}</div><div>${esc(inv.patient)} (${esc(inv.mrn)})</div><hr>${items}<hr><div style="display:flex;justify-content:space-between"><b>Total</b><b>${money(inv.total)}</b></div><div style="display:flex;justify-content:space-between">Paid<span>${money(inv.paid)}</span></div><div style="display:flex;justify-content:space-between"><b>Balance</b><b>${money(bal)}</b></div><p style="text-align:center;margin-top:12px">${esc(hi.invoice_footer || "Thank you")}</p></body>`);
       w.document.close(); w.print();
+    };
+    $("#waBtn").onclick = () => {
+      const msg = encodeURIComponent(META.hospital + "\nInvoice " + inv.number + "\nPatient: " + inv.patient + " (" + inv.mrn + ")\nTotal: " + money(inv.total) + "\nPaid: " + money(inv.paid) + "\nBalance: " + money(bal));
+      const phone = (inv.phone || "").replace(/\D/g, "");
+      window.open(phone ? "https://wa.me/" + phone + "?text=" + msg : "https://wa.me/?text=" + msg, "_blank");
     };
     $("#printBtn").onclick = () => {
       const hi = inv.hospital_info || META.settings || {};
