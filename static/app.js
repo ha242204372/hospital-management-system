@@ -560,7 +560,16 @@ async function openForm(res, id, done) {
     if (f.type === "select") return `<select ${n}><option value=""></option>${f.options.map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
     if (f.type === "ref") return `<select ${n}><option value=""></option>${opts[f.name].map(o => `<option value="${o.id}" ${o.id == v ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
     if (f.type === "textarea") return `<textarea ${n} rows="3">${esc(v)}</textarea>`;
-    if (f.type === "date") return `<input ${n} type="date" value="${esc(String(v).slice(0,10))}" required>`;
+    if (f.type === "date") {
+      const iso = String(v || new Date().toISOString().slice(0,10)).slice(0,10);
+      const [yy, mm, dd] = iso.split("-");
+      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const mOpts = months.map((name, i) => `<option value="${String(i+1).padStart(2,"0")}" ${String(i+1).padStart(2,"0")===mm?"selected":""}>${name}</option>`).join("");
+      const dOpts = Array.from({length:31}, (_,i) => { const d=String(i+1).padStart(2,"0"); return `<option value="${d}" ${d===dd?"selected":""}>${d}</option>`; }).join("");
+      const yNow = new Date().getFullYear();
+      const yOpts = Array.from({length:6}, (_,i) => { const y=yNow-1+i; return `<option value="${y}" ${String(y)===yy?"selected":""}>${y}</option>`; }).join("");
+      return `<span class="date-en" style="display:flex;gap:6px"><select class="dm">${mOpts}</select><select class="dd">${dOpts}</select><select class="dy">${yOpts}</select><input type="hidden" ${n} value="${iso}"></span>`;
+    }
     if (f.type === "time") return `<input ${n} type="time" value="${esc(v || "09:00")}">`;
     return `<input ${n} type="${f.type === "number" ? "number" : f.type}" ${f.type === "number" ? 'step="any" min="0"' : ""} value="${esc(v)}" ${f.type === "password" ? 'autocomplete="new-password"' : ""}>`;
   };
@@ -590,6 +599,11 @@ async function openForm(res, id, done) {
       finally { btn.disabled = false; btn.textContent = "✨ Auto-Draft with Gemini"; }
     };
   }
+  document.querySelectorAll(".date-en").forEach(box => {
+    const sync = () => { const h = box.querySelector("input[type=hidden]"); h.value = box.querySelector(".dy").value + "-" + box.querySelector(".dm").value + "-" + box.querySelector(".dd").value; };
+    box.querySelectorAll("select").forEach(s => s.onchange = sync);
+    sync();
+  });
   $("#rf").onsubmit = async e => {
     e.preventDefault(); const body = Object.fromEntries(new FormData(e.target));
     for (const k of Object.keys(body)) {
