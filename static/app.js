@@ -560,6 +560,8 @@ async function openForm(res, id, done) {
     if (f.type === "select") return `<select ${n}><option value=""></option>${f.options.map(o => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
     if (f.type === "ref") return `<select ${n}><option value=""></option>${opts[f.name].map(o => `<option value="${o.id}" ${o.id == v ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
     if (f.type === "textarea") return `<textarea ${n} rows="3">${esc(v)}</textarea>`;
+    if (f.type === "date") return `<input ${n} type="date" value="${esc(String(v).slice(0,10))}" required>`;
+    if (f.type === "time") return `<input ${n} type="time" value="${esc(v || "09:00")}">`;
     return `<input ${n} type="${f.type === "number" ? "number" : f.type}" ${f.type === "number" ? 'step="any" min="0"' : ""} value="${esc(v)}" ${f.type === "password" ? 'autocomplete="new-password"' : ""}>`;
   };
   openModal((id ? "Edit " : "New ") + res.label.replace(/s$/, ""), `<form id="rf" class="form">${res.fields.map(f => `<label class="${f.type === "textarea" ? "full" : ""}"><span class="${f.required ? "req" : ""}">${esc(f.label)}</span>${input(f)}</label>`).join("")}
@@ -590,6 +592,12 @@ async function openForm(res, id, done) {
   }
   $("#rf").onsubmit = async e => {
     e.preventDefault(); const body = Object.fromEntries(new FormData(e.target));
+    for (const k of Object.keys(body)) {
+      if (/date/i.test(k) && body[k]) {
+        const d = new Date(body[k]);
+        if (!isNaN(d)) body[k] = d.toISOString().slice(0, 10);
+      }
+    }
     try { await api(id ? `/r/${res.key}/${id}` : `/r/${res.key}`, { method: id ? "PUT" : "POST", body }); closeModal(); toast("Saved"); done(); } catch (err) { fail(err); }
   };
 }
