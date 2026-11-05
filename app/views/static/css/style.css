@@ -81,3 +81,7 @@ table.t{border-collapse:collapse;width:100%}
 @media(max-width:860px){.sidebar{position:fixed;z-index:30;left:-250px;transition:.25s}.sidebar.open{left:0}.menu{display:block}.form{grid-template-columns:1fr}.view{padding:14px}#clock{display:none}}
 
 .logo img{width:22px;height:22px;display:block}
+
+.form input[type=date],.form input[type=time]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
+.modal{overflow:auto}
+.modal-box{position:relative;z-index:21}
