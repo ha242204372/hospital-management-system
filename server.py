@@ -190,6 +190,18 @@ class Handler(BaseHTTPRequestHandler):
         role = user["role"]
 
         # 2. Metadata route
+        if path == "/api/i18n/en" or path == "/api/i18n/ur":
+            lang = path.rsplit("/", 1)[-1]
+            import json as _json
+            fp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "i18n", lang + ".json")
+            with open(fp, encoding="utf-8") as f:
+                return _json.load(f)
+        if path == "/api/me/language" and method == "PATCH":
+            lang = (self.body() or {}).get("language", "en")
+            if lang not in ("en", "ur"):
+                raise ApiError(400, "language must be en or ur")
+            return {"language": lang}
+
         if path == "/api/meta":
             settings = get_settings(conn)
             cur_code = settings.get("currency") or "PKR"
