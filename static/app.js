@@ -1,3 +1,25 @@
+
+let I18N = {};
+let LANG = localStorage.getItem("vmc_lang") || "en";
+async function loadLang(lang) {
+  LANG = lang === "ur" ? "ur" : "en";
+  localStorage.setItem("vmc_lang", LANG);
+  try { I18N = await api("/i18n/" + LANG); } catch { I18N = {}; }
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = LANG === "ur" ? "rtl" : "ltr";
+  const sel = document.getElementById("langSelect");
+  if (sel) sel.value = LANG;
+  const t = k => I18N[k] || k;
+  const h1 = document.querySelector(".portal h1");
+  if (h1) h1.textContent = t("choose_desk");
+  const sub = document.querySelector(".portal .muted");
+  if (sub) sub.textContent = t("pick_role");
+  const btn = document.querySelector("#loginForm button");
+  if (btn) btn.textContent = t("sign_in");
+  const out = document.getElementById("logout");
+  if (out) out.textContent = t("sign_out");
+}
+function applyLang() { return loadLang(LANG); }
 const DESKS = [
   {name:"Reception", user:"reception", pass:"reception123", blurb:"Patients, appointments, OPD queue", icon:"🏥", c1:"#0ea5e9", c2:"#0369a1"},
   {name:"Doctor", user:"doctor", pass:"doctor123", blurb:"EMR, prescriptions, AI copilot", icon:"🩺", c1:"#10b981", c2:"#047857"},
@@ -200,7 +222,7 @@ async function renderAccounts() {
   });
 }
 
-boot(); }
+loadLang(LANG).then(boot); }
   catch (err) { $("#loginErr").textContent = err.message; }
 };
 $("#demoAccounts")?.addEventListener("click", e => {
@@ -212,6 +234,8 @@ $("#demoAccounts")?.addEventListener("click", e => {
   f.requestSubmit();
 });
 $("#logout").onclick = async () => { await api("/logout", { method: "POST" }); showLogin(); };
+const _langSel = document.getElementById("langSelect");
+if (_langSel) _langSel.onchange = async () => { await loadLang(_langSel.value); if (typeof boot === "function" && !$("#app").classList.contains("hidden")) boot(); };
 $("#menuBtn").onclick = () => $("#sidebar").classList.toggle("open");
 $("#mClose").onclick = closeModal;
 $("#modal").onclick = e => { if (e.target.id === "modal") closeModal(); };
@@ -231,10 +255,11 @@ async function boot() {
   const role = META.user.role;
   const isDoc = role === "Doctor";
   let h = `<div class="brand"><div class="logo"><img src="/static/images/logo.svg" alt=""></div>${esc(META.hospital)}</div>`;
-  if (!isDoc) h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
-  if (["Admin", "Receptionist", "Doctor", "Nurse"].includes(role)) h += `<div class="nav" data-go="opd_queue"><span>🎫</span>${isDoc ? "My OPD" : "OPD Queue"}</div>`;
+  const tr = k => (typeof I18N !== "undefined" && I18N[k]) || k;
+  if (!isDoc) h += `<div class="nav" data-go="dashboard"><span>📊</span>${tr("dashboard")}</div>`;
+  if (["Admin", "Receptionist", "Doctor", "Nurse"].includes(role)) h += `<div class="nav" data-go="opd_queue"><span>🎫</span>${isDoc ? tr("my_opd") : tr("opd_queue")}</div>`;
   if (role === "Admin") h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup & Master Data</div>`;
-  if (role === "Admin" || role === "Doctor") h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
+  if (role === "Admin" || role === "Doctor") h += `<div class="nav" data-go="gemini_ai"><span>✨</span>${tr("ai_hub")}</div>`;
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
   if (role === "Admin" || role === "Accountant") h += `<div class="nav" data-go="accounts"><span>💳</span>Accounts & Finance</div>`;
   if (role === "Admin" || role === "Pharmacist") h += `<div class="nav" data-go="inventory_alerts"><span>⚠️</span>Inventory Alerts</div>`;
@@ -2196,4 +2221,4 @@ async function renderAccounts() {
   });
 }
 
-boot();
+loadLang(LANG).then(boot);
