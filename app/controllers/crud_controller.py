@@ -2,7 +2,7 @@
 import sqlite3
 import datetime as dt
 from app.config import ApiError
-from app.models.db import one, scalar, today, audit, add_charge, get_settings
+from app.models.db import one, scalar, today, audit, add_charge, get_settings, _exec, USE_POSTGRES
 from app.models.schema_registry import RES
 from app.controllers.auth_controller import hash_pw
 
@@ -75,12 +75,12 @@ def hook_before_create(conn, res, d, user):
 
 def hook_after_create(conn, res, id_, d):
     if res == "admissions":
-        conn.execute("UPDATE beds SET status='Occupied' WHERE id=?", (d["bed_id"],))
+        _exec(conn, "UPDATE beds SET status='Occupied' WHERE id=?", (d["bed_id"],))
     elif res == "encounters":
         doc = one(conn, "SELECT name, fee FROM staff WHERE id=?", (d["doctor_id"],))
         if doc and doc["fee"]:
             add_charge(conn, d["patient_id"], f"Consultation – {doc['name']} ({d['date']})", doc["fee"])
-        conn.execute(
+        _exec(conn, 
             "UPDATE appointments SET status='Completed' WHERE patient_id=? AND doctor_id=? AND date=? AND status='Scheduled'",
             (d["patient_id"], d["doctor_id"], d["date"]),
         )
@@ -88,7 +88,7 @@ def hook_after_create(conn, res, id_, d):
         t = one(conn, "SELECT name, price FROM lab_tests WHERE id=?", (d["test_id"],))
         add_charge(conn, d["patient_id"], f"Lab – {t['name']}", t["price"])
     elif res == "dispensing":
-        conn.execute("UPDATE medicines SET stock=stock-? WHERE id=?", (int(d["quantity"]), d["medicine_id"]))
+        _exec(conn, "UPDATE medicines SET stock=stock-? WHERE id=?", (int(d["quantity"]), d["medicine_id"]))
         m = one(conn, "SELECT name FROM medicines WHERE id=?", (d["medicine_id"],))
         add_charge(conn, d["patient_id"], f"Pharmacy – {m['name']} x{d['quantity']}", d["amount"])
 
@@ -106,8 +106,8 @@ def hook_before_update(conn, res, id_, d):
             b = one(conn, "SELECT status FROM beds WHERE id=?", (d["bed_id"],))
             if not b or b["status"] != "Available":
                 raise ApiError(400, "Selected bed is not available")
-            conn.execute("UPDATE beds SET status='Available' WHERE id=?", (old["bed_id"],))
-            conn.execute("UPDATE beds SET status='Occupied' WHERE id=?", (d["bed_id"],))
+            _exec(conn, "UPDATE beds SET status='Available' WHERE id=?", (old["bed_id"],))
+            _exec(conn, "UPDATE beds SET status='Occupied' WHERE id=?", (d["bed_id"],))
     elif res == "invoices":
         d.pop("patient_id", None)
 
@@ -116,7 +116,7 @@ def hook_before_delete(conn, res, id_):
     if res == "admissions":
         a = one(conn, "SELECT * FROM admissions WHERE id=?", (id_,))
         if a and a["status"] == "Admitted":
-            conn.execute("UPDATE beds SET status='Available' WHERE id=?", (a["bed_id"],))
+            _exec(conn, "UPDATE beds SET status='Available' WHERE id=?", (a["bed_id"],))
 
 
 def create(conn, key, data, user):
@@ -131,13 +131,21 @@ def create(conn, key, data, user):
     d = clean(r, data, True)
     hook_before_create(conn, key, d, user)
     cols = list(d.keys())
-    cur = conn.execute(
-        f"INSERT INTO {r['table']}({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
-        [d[c] for c in cols],
-    )
-    hook_after_create(conn, key, cur.lastrowid, d)
-    audit(conn, user, "create", f"{key} #{cur.lastrowid}")
-    return cur.lastrowid
+    if USE_POSTGRES:
+        _exec(conn, 
+            f"INSERT INTO {r['table']}({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
+            [d[c] for c in cols],
+        )
+        new_id = scalar(conn, f"SELECT MAX(id) FROM {r['table']}")
+    else:
+        cur = _exec(conn, 
+            f"INSERT INTO {r['table']}({','.join(cols)}) VALUES({','.join('?' * len(cols))})",
+            [d[c] for c in cols],
+        )
+        new_id = cur.lastrowid
+    hook_after_create(conn, key, new_id, d)
+    audit(conn, user, "create", f"{key} #{new_id}")
+    return new_id
 
 
 def update(conn, key, id_, data, user):
@@ -148,7 +156,7 @@ def update(conn, key, id_, data, user):
     hook_before_update(conn, key, id_, d)
     if not d:
         return
-    conn.execute(
+    _exec(conn, 
         f"UPDATE {r['table']} SET {','.join(c + '=?' for c in d)} WHERE id=?",
         list(d.values()) + [id_],
     )
@@ -159,7 +167,7 @@ def delete(conn, key, id_, user):
     r = get_res(key, user, "delete")
     hook_before_delete(conn, key, id_)
     try:
-        conn.execute(f"DELETE FROM {r['table']} WHERE id=?", (id_,))
+        _exec(conn, f"DELETE FROM {r['table']} WHERE id=?", (id_,))
     except sqlite3.IntegrityError:
         raise ApiError(409, "Cannot delete: record is referenced by other data")
     audit(conn, user, "delete", f"{key} #{id_}")
@@ -183,7 +191,7 @@ def discharge(conn, id_, user):
             f"Bed charges – {a['ward']} bed {a['bed_no']} ({days} day{'s' if days > 1 else ''})",
             amount,
         )
-    conn.execute("UPDATE admissions SET status='Discharged', discharge_date=? WHERE id=?", (today(), id_))
-    conn.execute("UPDATE beds SET status='Available' WHERE id=?", (a["bed_id"],))
+    _exec(conn, "UPDATE admissions SET status='Discharged', discharge_date=? WHERE id=?", (today(), id_))
+    _exec(conn, "UPDATE beds SET status='Available' WHERE id=?", (a["bed_id"],))
     audit(conn, user, "discharge", f"admission #{id_}")
     return {"days": days, "amount": amount, "invoice_id": inv}
