@@ -85,3 +85,13 @@ table.t{border-collapse:collapse;width:100%}
 .form input[type=date],.form input[type=time]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
 .modal{overflow:auto}
 .modal-box{position:relative;z-index:21}
+
+/* Cleaner Pakistan clinic layout */
+.view{padding:28px 32px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-bottom:22px}
+.card{padding:20px;border-radius:16px;box-shadow:0 1px 2px #0000000a}
+.kpi .v{font-size:22px}
+.qbar{padding:14px 16px;margin-bottom:18px}
+.nav{padding:10px 12px}
+.sidebar{width:230px;padding:18px 12px}
+.topbar{padding:14px 28px}
