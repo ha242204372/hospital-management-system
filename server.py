@@ -41,7 +41,7 @@ from app.config import (
     ApiError,
 )
 import app.models.db as db_mod
-from app.models.db import connect, rows, one, today, audit, recompute, get_settings
+from app.models.db import connect, rows, one, today, audit, recompute, get_settings, _exec
 from app.models.schema_registry import RES, REFS
 from app.models.seed import seed, init_db as _init_db
 from app.controllers.auth_controller import SESSIONS, current_user, handle_login, handle_logout
@@ -377,8 +377,32 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/rx/drugs":
             q = (qs.get("q") or [""])[0].strip().lower()
             drugs = rows(conn, "SELECT * FROM drug_master ORDER BY brand")
+            synonyms = {
+                "fever": ["paracetamol", "panadol", "ibuprofen", "brufen"],
+                "bukhar": ["paracetamol", "panadol"],
+                "pain": ["paracetamol", "ibuprofen", "diclofenac", "tramadol"],
+                "dard": ["paracetamol", "ibuprofen", "diclofenac"],
+                "cough": ["cetirizine", "montelukast", "salbutamol"],
+                "khansi": ["cetirizine", "montelukast"],
+                "cold": ["cetirizine", "paracetamol", "loratadine"],
+                "zukam": ["cetirizine", "paracetamol"],
+                "infection": ["amoxicillin", "azithromycin", "augmentin", "ciprofloxacin"],
+                "stomach": ["omeprazole", "risek", "domperidone", "pantoprazole"],
+                "acidity": ["omeprazole", "risek", "esomeprazole"],
+                "sugar": ["metformin", "glucophage", "gliclazide"],
+                "bp": ["amlodipine", "losartan", "atenolol"],
+                "blood pressure": ["amlodipine", "losartan"],
+                "allergy": ["cetirizine", "loratadine"],
+            }
             if q:
-                drugs = [d for d in drugs if q in (d.get("brand") or "").lower() or q in (d.get("generic") or "").lower()]
+                keys = [q]
+                for word, syns in synonyms.items():
+                    if word in q:
+                        keys.extend(syns)
+                def hit(d):
+                    blob = " ".join(str(d.get(k) or "") for k in ("brand", "generic", "category", "form")).lower()
+                    return any(k in blob for k in keys)
+                drugs = [d for d in drugs if hit(d)]
             return {"drugs": drugs[:30]}
         if path == "/api/rx/templates":
             tpls = rows(conn, "SELECT * FROM rx_template ORDER BY name")
