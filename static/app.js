@@ -204,49 +204,51 @@ async function renderAccounts() {
 async function renderPakistan() {
   const view = document.getElementById("view");
   view.innerHTML = '<div class="card">Loading Pakistan desk…</div>';
-  const [tok, shares, panels, batches] = await Promise.all([
+  const [tok, shares, panels, batches, patients, doctors, meds] = await Promise.all([
     api("/tokens").catch(() => ({ tokens: [] })),
     api("/doctor-shares").catch(() => ({ rules: [] })),
     api("/panels").catch(() => ({ panels: [] })),
     api("/pharmacy/batches").catch(() => ({ batches: [] })),
+    api("/options/patients").catch(() => []),
+    api("/options/doctors").catch(() => []),
+    api("/options/medicines").catch(() => []),
   ]);
+  const opt = (list) => (list || []).map(o => `<option value="${o.id}">${o.label || o.name || o.id}</option>`).join("");
   const tokens = (tok.tokens || []).map(t => `<tr><td>${t.number}</td><td>${t.patient || ""}</td><td>${t.doctor || ""}</td><td>${t.status}</td></tr>`).join("");
   view.innerHTML = `
     <div class="grid cols2">
       <div class="card"><b>Queue tokens</b>
-        <form id="tokF" class="form" style="margin-top:10px"><input name="patient_id" placeholder="Patient id" required><input name="doctor_id" placeholder="Doctor id"><button class="btn primary">Issue token</button></form>
+        <form id="tokF" class="form" style="margin-top:10px"><select name="patient_id" required><option value="">Patient</option>${opt(patients)}</select><select name="doctor_id"><option value="">Doctor</option>${opt(doctors)}</select><button class="btn primary">Issue token</button></form>
         <table class="mini" style="margin-top:10px"><tr><th>#</th><th>Patient</th><th>Doctor</th><th>Status</th></tr>${tokens || '<tr><td colspan="4" class="muted">None today</td></tr>'}</table>
       </div>
       <div class="card"><b>Doctor fee split</b>
-        <form id="shareF" class="form" style="margin-top:10px"><input name="doctor_id" placeholder="Doctor id" required><input name="service" placeholder="Service" value="Consultation"><input name="value" placeholder="Percent" value="40"><button class="btn">Save rule</button></form>
-        <div class="muted small" style="margin-top:8px">${(shares.rules || []).length} rules</div>
+        <form id="shareF" class="form" style="margin-top:10px"><select name="doctor_id" required><option value="">Doctor</option>${opt(doctors)}</select><input name="service" value="Consultation"><input name="value" value="40" placeholder="%"><button class="btn">Save rule</button></form>
+        <div class="muted small" style="margin-top:8px">${(shares.rules || []).map(r => (r.doctor || r.doctor_id) + " " + r.value + "%").join(", ") || "No rules"}</div>
       </div>
       <div class="card"><b>Panels</b>
         <form id="panelF" class="form" style="margin-top:10px"><input name="name" placeholder="Panel name" required><select name="panel_type"><option>corporate</option><option>insurance</option><option>sehat_card</option></select><button class="btn">Add</button></form>
         <div class="muted small" style="margin-top:8px">${(panels.panels || []).map(p => p.name).join(", ") || "None"}</div>
       </div>
-      <div class="card"><b>Pharmacy batches</b>
-        <form id="batchF" class="form" style="margin-top:10px"><input name="medicine_id" placeholder="Medicine id" required><input name="batch_no" placeholder="Batch"><input name="expiry" type="date"><input name="qty" placeholder="Qty"><button class="btn">Add batch</button></form>
+      <div class="card"><b>Pharmacy batches (FEFO)</b>
+        <form id="batchF" class="form" style="margin-top:10px"><select name="medicine_id" required><option value="">Medicine</option>${opt(meds)}</select><input name="batch_no" placeholder="Batch"><input name="expiry" type="date"><input name="qty" placeholder="Qty"><button class="btn">Add batch</button></form>
         <div class="muted small" style="margin-top:8px">${(batches.batches || []).length} batches</div>
       </div>
-      <div class="card"><b>FBR sandbox</b>
-        <button class="btn" id="fbrBtn">Submit mock invoice</button>
-        <div id="fbrOut" class="muted small" style="margin-top:8px"></div>
-      </div>
+      <div class="card"><b>FBR sandbox</b><button class="btn" id="fbrBtn">Submit mock invoice</button><div id="fbrOut" class="muted small" style="margin-top:8px"></div></div>
       <div class="card"><b>WhatsApp / SMS (mock)</b>
         <form id="msgF" class="form" style="margin-top:10px"><input name="to" placeholder="+92..."><input name="body" placeholder="Message"><button class="btn">Send mock</button></form>
         <div id="msgOut" class="muted small"></div>
       </div>
+      <div class="card"><b>Backup</b><p class="muted small">One-click request. Copy the database file or run pg_dump.</p><button class="btn" id="bakBtn">Request backup</button><div id="bakOut" class="muted small"></div></div>
     </div>`;
-  const bind = (id, path, done) => {
+  const bind = (id, path) => {
     const f = document.getElementById(id);
     if (!f) return;
-    f.onsubmit = async e => { e.preventDefault(); try { await api(path, { method: "POST", body: Object.fromEntries(new FormData(f)) }); done(); } catch (err) { fail(err); } };
+    f.onsubmit = async e => { e.preventDefault(); try { await api(path, { method: "POST", body: Object.fromEntries(new FormData(f)) }); renderPakistan(); } catch (err) { fail(err); } };
   };
-  bind("tokF", "/tokens", () => renderPakistan());
-  bind("shareF", "/doctor-shares", () => renderPakistan());
-  bind("panelF", "/panels", () => renderPakistan());
-  bind("batchF", "/pharmacy/batches", () => renderPakistan());
+  bind("tokF", "/tokens");
+  bind("shareF", "/doctor-shares");
+  bind("panelF", "/panels");
+  bind("batchF", "/pharmacy/batches");
   document.getElementById("fbrBtn").onclick = async () => {
     const r = await api("/fbr/submit", { method: "POST", body: { invoice_id: 1 } });
     document.getElementById("fbrOut").textContent = r.fbr_invoice_no + " (sandbox)";
@@ -256,8 +258,21 @@ async function renderPakistan() {
     const r = await api("/notify", { method: "POST", body: Object.fromEntries(new FormData(e.target)) });
     document.getElementById("msgOut").textContent = r.status;
   };
+  document.getElementById("bakBtn").onclick = async () => {
+    const r = await api("/backup", { method: "POST", body: {} });
+    document.getElementById("bakOut").textContent = r.note;
+  };
 }
 
+
+
+async function renderPatientPortal() {
+  const view = document.getElementById("view");
+  const d = await api("/portal/me").catch(() => ({ appointments: [], invoices: [] }));
+  const ap = (d.appointments || []).map(a => `<tr><td>${a.date}</td><td>${a.time || ""}</td><td>${a.reason || ""}</td><td>${a.status}</td></tr>`).join("");
+  const inv = (d.invoices || []).map(i => `<tr><td>${i.number}</td><td>${i.date}</td><td>${i.total}</td><td>${i.status}</td></tr>`).join("");
+  view.innerHTML = `<div class="card"><b>My appointments</b><table class="mini"><tr><th>Date</th><th>Time</th><th>Reason</th><th>Status</th></tr>${ap || '<tr><td colspan="4" class="muted">None</td></tr>'}</table></div><div class="card" style="margin-top:12px"><b>My invoices</b><table class="mini"><tr><th>No</th><th>Date</th><th>Total</th><th>Status</th></tr>${inv || '<tr><td colspan="4" class="muted">None</td></tr>'}</table></div>`;
+}
 
 boot(); }
   catch (err) { $("#loginErr").textContent = err.message; }
@@ -301,16 +316,17 @@ async function boot() {
   if (role === "Admin") h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
   for (const [g, list] of Object.entries(groups)) { h += `<div class="sgroup">${g}</div>`; list.forEach(r => h += `<div class="nav" data-go="${r.key}"><span>${r.icon}</span>${esc(r.label)}</div>`); }
   $("#sidebar").innerHTML = h;
-  go(location.hash.slice(1) || (META.user.role === "Doctor" ? "opd_queue" : "dashboard"));
+  go(location.hash.slice(1) || (META.user.role === "Doctor" ? "opd_queue" : META.user.role === "Patient" ? "portal" : "dashboard"));
 }
 $("#sidebar").onclick = e => { const n = e.target.closest("[data-go]"); if (n) { go(n.dataset.go); $("#sidebar").classList.remove("open"); } };
 function go(key) {
-  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio", "accounts", "opd_queue", "inventory_alerts", "pakistan"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
+  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio", "accounts", "opd_queue", "inventory_alerts", "pakistan", "portal"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
   current = key; location.hash = key;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   $("#view").innerHTML = "";
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
   if (key === "pakistan") { $("#pageTitle").textContent = "Pakistan Desk"; return renderPakistan(); }
+  if (key === "portal") { $("#pageTitle").textContent = "My portal"; return renderPatientPortal(); }
   if (key === "opd_queue") {
     $("#pageTitle").textContent = "OPD Queue";
     $("#view").innerHTML = '<div class="card"><b>OPD Queue</b><p>Loading appointments…</p><button class="btn sm primary" onclick="go(\'appointments\')">Open Appointments</button></div>';
@@ -2315,5 +2331,14 @@ async function renderPakistan() {
   };
 }
 
+
+
+async function renderPatientPortal() {
+  const view = document.getElementById("view");
+  const d = await api("/portal/me").catch(() => ({ appointments: [], invoices: [] }));
+  const ap = (d.appointments || []).map(a => `<tr><td>${a.date}</td><td>${a.time || ""}</td><td>${a.reason || ""}</td><td>${a.status}</td></tr>`).join("");
+  const inv = (d.invoices || []).map(i => `<tr><td>${i.number}</td><td>${i.date}</td><td>${i.total}</td><td>${i.status}</td></tr>`).join("");
+  view.innerHTML = `<div class="card"><b>My appointments</b><table class="mini"><tr><th>Date</th><th>Time</th><th>Reason</th><th>Status</th></tr>${ap || '<tr><td colspan="4" class="muted">None</td></tr>'}</table></div><div class="card" style="margin-top:12px"><b>My invoices</b><table class="mini"><tr><th>No</th><th>Date</th><th>Total</th><th>Status</th></tr>${inv || '<tr><td colspan="4" class="muted">None</td></tr>'}</table></div>`;
+}
 
 boot();
