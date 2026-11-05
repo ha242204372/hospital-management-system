@@ -1,17 +1,17 @@
 const DESKS = [
-  {name:"Reception", user:"reception", pass:"reception123", blurb:"Patients, appointments, OPD queue"},
-  {name:"Doctor", user:"doctor", pass:"doctor123", blurb:"EMR, prescriptions, AI copilot"},
-  {name:"Pharmacy", user:"pharmacy", pass:"pharmacy123", blurb:"Stock, dispense, expiry alerts"},
-  {name:"Laboratory", user:"lab", pass:"lab123", blurb:"Lab orders and results"},
-  {name:"Accounts", user:"accounts", pass:"accounts123", blurb:"Invoices, JazzCash, receipts"},
-  {name:"Nursing / IPD", user:"nurse", pass:"nurse123", blurb:"Beds, MAR, admissions"},
-  {name:"Admin", user:"admin", pass:"admin123", blurb:"Hospital setup and all desks"},
-  {name:"Patient", user:"patient", pass:"patient123", blurb:"Patient portal"},
+  {name:"Reception", user:"reception", pass:"reception123", blurb:"Patients, appointments, OPD queue", icon:"🏥", c1:"#0ea5e9", c2:"#0369a1"},
+  {name:"Doctor", user:"doctor", pass:"doctor123", blurb:"EMR, prescriptions, AI copilot", icon:"🩺", c1:"#10b981", c2:"#047857"},
+  {name:"Pharmacy", user:"pharmacy", pass:"pharmacy123", blurb:"Stock, dispense, expiry alerts", icon:"💊", c1:"#f59e0b", c2:"#b45309"},
+  {name:"Laboratory", user:"lab", pass:"lab123", blurb:"Lab orders and results", icon:"🔬", c1:"#8b5cf6", c2:"#6d28d9"},
+  {name:"Accounts", user:"accounts", pass:"accounts123", blurb:"Invoices, JazzCash, receipts", icon:"💳", c1:"#ef4444", c2:"#b91c1c"},
+  {name:"Nursing / IPD", user:"nurse", pass:"nurse123", blurb:"Beds, MAR, admissions", icon:"🛏️", c1:"#06b6d4", c2:"#0e7490"},
+  {name:"Admin", user:"admin", pass:"admin123", blurb:"Hospital setup and all desks", icon:"⚙️", c1:"#6366f1", c2:"#4338ca"},
+  {name:"Patient", user:"patient", pass:"patient123", blurb:"Patient portal", icon:"🧑", c1:"#ec4899", c2:"#be185d"},
 ];
 function renderPortal() {
   const g = document.getElementById("portalGrid");
   if (!g) return;
-  g.innerHTML = DESKS.map(d => `<button type="button" class="desk" data-u="${d.user}" data-p="${d.pass}"><b>${d.name}</b><span>${d.blurb}</span></button>`).join("");
+  g.innerHTML = DESKS.map(d => `<button type="button" class="desk" data-u="${d.user}" data-p="${d.pass}" style="--c1:${d.c1};--c2:${d.c2}"><div class="desk-ic">${d.icon}</div><b>${d.name}</b><span>${d.blurb}</span></button>`).join("");
   g.onclick = e => {
     const b = e.target.closest(".desk");
     if (!b) return;
