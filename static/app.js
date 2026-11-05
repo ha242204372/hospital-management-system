@@ -703,6 +703,35 @@ async function openForm(res, id, done) {
       finally { btn.disabled = false; btn.textContent = "✨ Auto-Draft with Gemini"; }
     };
   }
+
+  if (res.key === "prescriptions") {
+    const form = document.getElementById("rf");
+    const box = document.createElement("div");
+    box.id = "rxContext";
+    box.className = "full";
+    box.style.cssText = "grid-column:1/-1;background:#f0f9fa;border:1px solid #b8e2e6;border-radius:8px;padding:10px;font-size:13px";
+    box.innerHTML = "Select a patient to load indoor/outdoor status and history.";
+    form.insertBefore(box, form.querySelector(".form-foot"));
+    const loadCtx = async () => {
+      const pid = form.patient_id.value;
+      if (!pid) { box.innerHTML = "Select a patient to load indoor/outdoor status and history."; return; }
+      const c = await api("/patients/" + pid + "/clinical-context").catch(() => null);
+      if (!c) { box.innerHTML = "Could not load history."; return; }
+      const badge = c.indoor ? '<span class="badge" style="background:#fee2e2">IPD — Indoor</span>' : '<span class="badge" style="background:#dcfce7">OPD — Outdoor</span>';
+      if (form.visit_type) form.visit_type.value = c.indoor ? "IPD (Indoor)" : "OPD (Outdoor)";
+      const last = (c.encounters || [])[0];
+      if (last && form.diagnosis && !form.diagnosis.value) form.diagnosis.value = last.diagnosis || "";
+      if (last && form.bp && !form.bp.value) form.bp.value = last.bp || "";
+      if (last && form.pulse && !form.pulse.value) form.pulse.value = last.pulse || "";
+      if (last && form.temperature && !form.temperature.value) form.temperature.value = last.temperature || "";
+      const hist = (c.encounters || []).map(e => e.date + ": " + (e.diagnosis || "—")).join("<br>") || "No prior consultations";
+      const prior = (c.prescriptions || []).map(r => r.date + " " + (r.diagnosis || "")).join("<br>") || "No prior prescriptions";
+      box.innerHTML = badge + "<div style='margin-top:6px'><b>Recent diagnosis</b><br>" + hist + "</div><div style='margin-top:6px'><b>Prior Rx</b><br>" + prior + "</div>";
+    };
+    form.patient_id.onchange = loadCtx;
+    if (form.patient_id.value) loadCtx();
+  }
+
   document.querySelectorAll(".date-en").forEach(box => {
     const sync = () => { const h = box.querySelector("input[type=hidden]"); h.value = box.querySelector(".dy").value + "-" + box.querySelector(".dm").value + "-" + box.querySelector(".dd").value; };
     box.querySelectorAll("select").forEach(s => s.onchange = sync);
