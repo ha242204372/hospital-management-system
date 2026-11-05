@@ -411,7 +411,10 @@ async function boot() {
   if (!isDoc) h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
   if (["Admin", "Receptionist", "Doctor", "Nurse"].includes(role)) h += `<div class="nav" data-go="opd_queue"><span>🎫</span>${isDoc ? "My OPD" : "OPD Queue"}</div>`;
   if (role === "Admin") h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup & Master Data</div>`;
-  if (role === "Admin" || role === "Doctor") h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
+  if (role === "Admin" || role === "Doctor") {
+    h += `<div class="nav" data-go="rx_studio"><span>💊</span>Prescription Studio</div>`;
+    h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
+  }
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
   if (role === "Admin" || role === "Accountant") h += `<div class="nav" data-go="accounts"><span>💳</span>Accounts & Finance</div>`;
   if (role === "Admin" || role === "Pharmacist") h += `<div class="nav" data-go="inventory_alerts"><span>⚠️</span>Inventory Alerts</div>`;
