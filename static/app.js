@@ -2473,112 +2473,105 @@ async function renderPatientPortal() {
 
 async function renderRxStudio() {
   const view = document.getElementById("view");
-  const [patients, doctors] = await Promise.all([
+  const [patients, doctors, tpls] = await Promise.all([
     api("/options/patients").catch(() => []),
     api("/options/doctors").catch(() => []),
+    api("/rx/templates").catch(() => ({ templates: [] })),
   ]);
   const opt = list => (list || []).map(o => `<option value="${o.id}">${o.label || o.name}</option>`).join("");
+  const tplOpt = (tpls.templates || []).map(t => `<option value="${t.id}">${t.name}</option>`).join("");
   view.innerHTML = `
     <div class="grid cols2">
       <div class="card">
-        <b>Patient</b>
+        <b>Consultation → Prescribe</b>
         <div class="form" style="margin-top:10px">
-          <select id="rxPatient"><option value="">Select patient</option>${opt(patients)}</select>
+          <select id="rxPatient"><option value="">Patient</option>${opt(patients)}</select>
           <select id="rxDoctor"><option value="">Doctor</option>${opt(doctors)}</select>
-          <select id="rxVisit"><option>OPD (Outdoor)</option><option>IPD (Indoor)</option></select>
-          <input id="rxDx" placeholder="Diagnosis e.g. fever, cough">
-          <input id="rxBp" placeholder="BP"><input id="rxPulse" placeholder="Pulse"><input id="rxTemp" placeholder="Temp">
+          <input id="rxDx" placeholder="Diagnosis">
+          <input id="rxFollow" type="date" placeholder="Follow-up">
+          <select id="rxTpl"><option value="">Template</option>${tplOpt}</select>
+          <button class="btn" id="rxApply" type="button">Apply template</button>
         </div>
-        <div id="rxCtx" class="muted small" style="margin-top:8px">Select a patient.</div>
+        <div id="rxCtx" class="muted small" style="margin-top:8px"></div>
       </div>
       <div class="card">
-        <b>Intelligent medicine search</b>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-          <input id="rxQ" placeholder="Search one or more medicines" style="flex:1">
-          <button class="btn" id="rxSearch">Search</button>
-          <button class="btn primary" id="rxAi">Suggest multiple</button>
+        <b>Drug search (generic or brand)</b>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input id="rxQ" placeholder="Panadol, Augmentin, fever…" style="flex:1">
+          <button class="btn" id="rxSearch" type="button">Search</button>
         </div>
-        <div id="rxHits" style="margin-top:10px;max-height:280px;overflow:auto"></div>
+        <div id="rxHits" style="margin-top:10px;max-height:260px;overflow:auto"></div>
       </div>
     </div>
     <div class="card" style="margin-top:12px">
-      <b>Prescription — multiple medicines</b> <span class="badge" id="rxCount">0</span>
+      <b>Prescription items</b> <span class="badge" id="rxCount">0</span>
       <table class="mini" id="rxLines" style="margin-top:8px"></table>
-      <button class="btn primary" id="rxSave" style="margin-top:10px">Save all medicines</button>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn primary" id="rxSave" type="button">Sign prescription</button>
+        <button class="btn" id="rxPrint" type="button">Print A5</button>
+      </div>
       <div id="rxMsg" class="muted small" style="margin-top:6px"></div>
     </div>`;
   const lines = [];
-  const drawLines = () => {
+  const templates = tpls.templates || [];
+  const draw = () => {
     document.getElementById("rxCount").textContent = lines.length;
     const tb = document.getElementById("rxLines");
-    tb.innerHTML = `<tr><th>#</th><th>Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th></th></tr>` +
-      (lines.map((l, i) => `<tr><td>${i + 1}</td><td>${l.name}</td><td><input data-i="${i}" data-k="dosage" value="${l.dosage}"></td><td><select data-i="${i}" data-k="frequency"><option ${l.frequency==="OD"?"selected":""}>OD</option><option ${l.frequency==="BD"?"selected":""}>BD</option><option ${l.frequency==="TDS"?"selected":""}>TDS</option><option ${l.frequency==="QID"?"selected":""}>QID</option><option>SOS</option></select></td><td><input data-i="${i}" data-k="duration" value="${l.duration}"></td><td><button class="btn sm" data-rm="${i}">Remove</button></td></tr>`).join("")
-      || `<tr><td colspan="6" class="muted">No medicines yet. Search or use Suggest multiple.</td></tr>`);
-    tb.querySelectorAll("input,select").forEach(inp => inp.onchange = () => { lines[+inp.dataset.i][inp.dataset.k] = inp.value; });
-    tb.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { lines.splice(+b.dataset.rm, 1); drawLines(); });
+    tb.innerHTML = `<tr><th>#</th><th>Drug</th><th>Dose</th><th>Frequency</th><th>Duration</th><th>Qty</th><th></th></tr>` +
+      (lines.map((l, i) => `<tr><td>${i+1}</td><td>${l.brand} <span class="muted small">${l.generic}</span></td><td>${l.dose}</td><td>${l.frequency}</td><td>${l.duration}</td><td>${l.quantity}</td><td><button class="btn sm" data-rm="${i}">✕</button></td></tr>`).join("")
+      || `<tr><td colspan="7" class="muted">Add drugs from search or a template</td></tr>`);
+    tb.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { lines.splice(+b.dataset.rm, 1); draw(); });
   };
-  const addMed = m => {
-    if (lines.find(l => String(l.id) === String(m.id))) return;
-    lines.push({ id: m.id, name: m.name, dosage: "1 tab", frequency: "BD", duration: "5 days" });
-    drawLines();
+  const addDrug = d => {
+    if (lines.find(l => l.drug_id === d.id)) return;
+    const freq = "BD";
+    lines.push({ drug_id: d.id, brand: d.brand, generic: d.generic, dose: d.default_dose || "1", frequency: freq, duration: "5 days", quantity: 10, route: d.route, timing: "after meal" });
+    draw();
   };
-  const addMany = list => { (list || []).forEach(addMed); };
-  const showHits = list => {
-    const box = document.getElementById("rxHits");
-    box.innerHTML = `<div style="margin-bottom:8px"><button class="btn sm primary" id="addAll">Add all ${ (list || []).length }</button></div>` +
-      ((list || []).map(m => `<label style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span><input type="checkbox" data-pick="${m.id}" checked> ${m.name} <span class="muted small">stock ${m.stock ?? ""}</span></span><button type="button" class="btn sm" data-add="${m.id}">Add</button></label>`).join("")
-      || '<div class="muted">No matches</div>');
-    box.onclick = e => {
-      const one = e.target.closest("[data-add]");
-      if (one) { const m = (list || []).find(x => String(x.id) === one.dataset.add); if (m) addMed(m); return; }
-      if (e.target.id === "addAll") {
-        const picked = [...box.querySelectorAll("[data-pick]:checked")].map(c => (list || []).find(x => String(x.id) === c.dataset.pick)).filter(Boolean);
-        addMany(picked.length ? picked : list);
-      }
+  const show = list => {
+    document.getElementById("rxHits").innerHTML = (list || []).map(d => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span><b>${d.brand}</b> ${d.generic} ${d.strength} <span class="muted small">PKR ${d.price}</span></span><button class="btn sm" data-add="${d.id}">Add</button></div>`).join("") || '<div class="muted">No matches</div>';
+    document.getElementById("rxHits").onclick = e => {
+      const b = e.target.closest("[data-add]");
+      if (!b) return;
+      const d = (list || []).find(x => String(x.id) === b.dataset.add);
+      if (d) addDrug(d);
     };
   };
   document.getElementById("rxSearch").onclick = async () => {
-    const q = document.getElementById("rxQ").value;
-    const r = await api("/rx/search?q=" + encodeURIComponent(q));
-    showHits(r.medicines || []);
+    const r = await api("/rx/drugs?q=" + encodeURIComponent(document.getElementById("rxQ").value));
+    show(r.drugs || []);
   };
-  document.getElementById("rxAi").onclick = async () => {
-    const r = await api("/rx/suggest", { method: "POST", body: { diagnosis: document.getElementById("rxDx").value || document.getElementById("rxQ").value } });
-    document.getElementById("rxMsg").textContent = (r.suggestions || []).length + " medicines suggested. " + (r.note || "");
-    showHits(r.suggestions || []);
-    addMany(r.suggestions || []);
-  };
-  document.getElementById("rxPatient").onchange = async () => {
-    const pid = document.getElementById("rxPatient").value;
-    if (!pid) return;
-    const c = await api("/patients/" + pid + "/clinical-context").catch(() => null);
-    if (!c) return;
-    document.getElementById("rxVisit").value = c.indoor ? "IPD (Indoor)" : "OPD (Outdoor)";
-    document.getElementById("rxCtx").textContent = (c.indoor ? "Indoor. " : "Outdoor. ") + ((c.encounters || []).map(e => e.date + ": " + (e.diagnosis || "—")).join(" · ") || "No prior visits");
-    if (c.encounters && c.encounters[0]) {
-      document.getElementById("rxDx").value = c.encounters[0].diagnosis || "";
-      document.getElementById("rxBp").value = c.encounters[0].bp || "";
-      document.getElementById("rxPulse").value = c.encounters[0].pulse || "";
-      document.getElementById("rxTemp").value = c.encounters[0].temperature || "";
+  document.getElementById("rxApply").onclick = async () => {
+    const id = document.getElementById("rxTpl").value;
+    const t = templates.find(x => String(x.id) === id);
+    if (!t) return;
+    const all = await api("/rx/drugs");
+    for (const it of t.items || []) {
+      const d = (all.drugs || []).find(x => x.brand === it.drug_name || x.generic === it.drug_name);
+      if (d) addDrug({ ...d, default_dose: it.dose });
     }
+    document.getElementById("rxDx").value = t.diagnosis || document.getElementById("rxDx").value;
   };
   document.getElementById("rxSave").onclick = async () => {
     const pid = document.getElementById("rxPatient").value;
-    const did = document.getElementById("rxDoctor").value;
-    if (!pid || !lines.length) { document.getElementById("rxMsg").textContent = "Pick a patient and add medicines."; return; }
-    for (const l of lines) {
-      await api("/r/prescriptions", { method: "POST", body: {
-        patient_id: pid, doctor_id: did, visit_type: document.getElementById("rxVisit").value,
-        diagnosis: document.getElementById("rxDx").value, bp: document.getElementById("rxBp").value,
-        pulse: document.getElementById("rxPulse").value, temperature: document.getElementById("rxTemp").value,
-        medicine_id: l.id, dosage: l.dosage, frequency: l.frequency, duration: l.duration,
-        date: new Date().toISOString().slice(0, 10)
-      }});
-    }
-    document.getElementById("rxMsg").textContent = "Saved " + lines.length + " medicines for this patient.";
-    lines.length = 0; drawLines();
+    if (!pid || !lines.length) { document.getElementById("rxMsg").textContent = "Patient and at least one drug required."; return; }
+    const r = await api("/rx", { method: "POST", body: {
+      patient_id: pid, doctor_id: document.getElementById("rxDoctor").value,
+      diagnosis: document.getElementById("rxDx").value, follow_up: document.getElementById("rxFollow").value,
+      items: lines
+    }});
+    document.getElementById("rxMsg").textContent = "Signed. Verify: " + (r.verify || "");
+    window._lastRx = { header: r, lines, patient: document.getElementById("rxPatient").selectedOptions[0].text, dx: document.getElementById("rxDx").value };
   };
-  drawLines();
+  document.getElementById("rxPrint").onclick = () => {
+    const rx = window._lastRx;
+    if (!rx) { document.getElementById("rxMsg").textContent = "Sign first."; return; }
+    const w = window.open("", "_blank", "width=520,height=700");
+    const rowsHtml = rx.lines.map(l => `<tr><td>${l.brand} (${l.generic})</td><td>${l.dose}</td><td>${l.frequency}</td><td>${l.duration}</td></tr>`).join("");
+    w.document.write(`<title>Prescription</title><body style="font-family:sans-serif;width:480px;margin:16px"><h2>${META.hospital}</h2><p>${rx.patient}<br>Dx: ${rx.dx}</p><table border="1" cellpadding="6" cellspacing="0" width="100%"><tr><th>Drug</th><th>Dose</th><th>Freq</th><th>Days</th></tr>${rowsHtml}</table><p>AI suggestion – doctor to verify<br>Verify token on file</p></body>`);
+    w.document.close(); w.print();
+  };
+  draw();
 }
 
 
