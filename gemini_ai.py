@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gemini AI Hub for MediCare HMS.
+"""Gemini AI Hub for VizMedCare HMS.
 
 Uses the Gemini Interactions API (`gemini-3.8-flash` & `gemini-4-argon`):
 - Primary: `google-genai` SDK (`client.interactions.create`) when installed
@@ -226,7 +226,7 @@ TRIAGE_SCHEMA = {
 
 def ai_triage(symptoms, age=None, gender=None, vitals=None, model=None):
     sys_inst = (
-        "You are an expert Emergency Department triage clinician at MediCare General Hospital. "
+        "You are an expert Emergency Department triage clinician at VizMedCare. "
         "Given patient symptoms, demographics, and optional vitals, return a structured JSON triage assessment "
         "mapping to hospital departments: Cardiology, Neurology, Orthopedics, Pediatrics, Gynecology, General Medicine, Emergency, or Radiology. "
         "Always include `emergency_medications` (stat/first-line emergency treatment medicines with dose and route, e.g., Chewable Aspirin 300mg PO stat, "
@@ -407,7 +407,7 @@ SOAP_SCHEMA = {
 def ai_clinical_copilot(brief_notes, patient=None, vitals=None, model=None):
     p_info = f"{patient.get('name')} ({patient.get('gender')}, DOB {patient.get('dob')}, Blood {patient.get('blood_group')}, Allergies: {patient.get('allergies') or 'None'})" if patient else "Unknown patient"
     sys_inst = (
-        "You are a clinical documentation & decision-support copilot for physicians at MediCare General Hospital. "
+        "You are a clinical documentation & decision-support copilot for physicians at VizMedCare. "
         "Convert brief physician shorthand into a complete SOAP note (Subjective, Objective, Assessment, Plan), "
         "primary diagnosis with ICD-10 code, safe prescription respecting patient allergies, and recommended lab tests."
     )
@@ -463,7 +463,7 @@ def ai_clinical_copilot(brief_notes, patient=None, vitals=None, model=None):
 
 def ai_patient_summary(profile_data, model=None):
     sys_inst = (
-        "You are a senior attending physician at MediCare General Hospital. "
+        "You are a senior attending physician at VizMedCare. "
         "Synthesize the patient's longitudinal EMR (demographics, allergies, consultations, admissions, labs, dispensed medications, and billing status) "
         "into a concise clinical handoff summary with sections: Clinical Overview, Active Risks & Allergies, Recent Diagnostics & Trends, Medication Review, and Recommended Next Steps. "
         "All currency and billing figures are in PKR (Pakistani Rupees); always prefix monetary amounts with 'PKR '."
@@ -501,7 +501,7 @@ def ai_patient_summary(profile_data, model=None):
 
 def ai_Rx_safety_check(medicines_list, allergies="", existing_meds=None, model=None):
     sys_inst = (
-        "You are a clinical pharmacist specialist at MediCare General Hospital. "
+        "You are a clinical pharmacist specialist at VizMedCare. "
         "Evaluate the proposed medication list against patient allergies and existing medications for drug-allergy conflicts, "
         "drug-drug interactions, duplicate therapy, and dosing precautions."
     )
@@ -531,7 +531,7 @@ def ai_Rx_safety_check(medicines_list, allergies="", existing_meds=None, model=N
 
 def ai_executive_briefing(kpis, extra_context, question=None, previous_interaction_id=None, model=None):
     sys_inst = (
-        "You are the Chief Medical Information Officer & Operations AI Advisor for MediCare General Hospital. "
+        "You are the Chief Medical Information Officer & Operations AI Advisor for VizMedCare. "
         "You have live access to hospital KPIs, bed occupancy, revenue, lab backlog, and pharmacy stock alerts. "
         "All currency, revenue, and invoice figures in this hospital are strictly in PKR (Pakistani Rupees) — always format monetary amounts with 'PKR ' (never use $ or ₹). "
         "Provide actionable, quantitative executive insights and answer administrator/clinician questions accurately."
@@ -568,7 +568,7 @@ def ai_executive_briefing(kpis, extra_context, question=None, previous_interacti
     else:
         low_names = ", ".join(f"{m['name']} ({m['stock']})" for m in extra_context.get("low_stock_list", [])[:4])
         reply = (
-            f"### MediCare General Hospital — Executive Daily Briefing\n"
+            f"### VizMedCare — Executive Daily Briefing\n"
             f"1. **Capacity & Inpatient Flow:** Bed occupancy is at **{occ}%** ({kpis.get('beds_occupied')}/{kpis.get('beds_total')} beds) with **{kpis.get('admitted')} active admissions** and **{kpis.get('appointments_today')} outpatient appointments** scheduled today across **{kpis.get('doctors')} active doctors**.\n"
             f"2. **Diagnostics Throughput:** **{kpis.get('pending_labs')} lab orders** are currently in `Ordered` or `Sample Collected` status — prioritize STAT hematology and biochemistry panels.\n"
             f"3. **Pharmacy Supply Chain:** **{kpis.get('low_stock')} formulary items** are below reorder level and **{kpis.get('expiring')} batches** expire within 90 days ({low_names or 'all clear'}).\n"
