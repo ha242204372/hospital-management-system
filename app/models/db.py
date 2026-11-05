@@ -89,6 +89,16 @@ def save_settings(conn, data):
 
 
 def ensure_extra_tables(conn):
+    try:
+        from app.models.rx import ensure_rx_tables, seed_drugs
+        ensure_rx_tables(conn, _exec)
+        seed_drugs(conn, _exec, rows)
+        if USE_POSTGRES:
+            conn.commit()
+    except Exception:
+        if USE_POSTGRES:
+            conn.rollback()
+
     """Create tables/columns added after initial migration. Each statement is isolated."""
     stmts = [
         """CREATE TABLE IF NOT EXISTS prescriptions (
