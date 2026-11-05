@@ -108,3 +108,10 @@ table.t{border-collapse:collapse;width:100%}
 .desk-ic{width:42px;height:42px;border-radius:12px;background:#ffffff33;display:grid;place-items:center;font-size:20px}
 .desk b{display:block;margin:10px 0 4px;font-size:16px}
 .desk span{color:#ffffffd0;font-size:12px}
+
+html[dir="rtl"] body{font-family:"Noto Nastaliq Urdu",Inter,sans-serif}
+html[dir="rtl"] .app{flex-direction:row-reverse}
+html[dir="rtl"] .sidebar{border-left:1px solid #ffffff12;border-right:0}
+html[dir="rtl"] .nav{flex-direction:row-reverse}
+html[dir="rtl"] .topbar{flex-direction:row-reverse}
+html[dir="rtl"] .portal-top{flex-direction:row-reverse}
