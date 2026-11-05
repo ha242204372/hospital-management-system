@@ -228,26 +228,20 @@ async function boot() {
   const logo = META.settings?.logo_icon || "✚";
   const groups = {};
   META.resources.forEach(r => (groups[r.group] ||= []).push(r));
+  const role = META.user.role;
+  const isDoc = role === "Doctor";
   let h = `<div class="brand"><div class="logo"><img src="/static/images/logo.svg" alt=""></div>${esc(META.hospital)}</div>`;
-  h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
-  h += `<div class="nav" data-go="opd_queue"><span>🎫</span>OPD Queue</div>`;
-  if (META.user.role === "Admin") {
-    h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup &amp; Master Data</div>`;
-  }
-  h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
+  if (!isDoc) h += `<div class="nav" data-go="dashboard"><span>📊</span>Dashboard</div>`;
+  if (["Admin", "Receptionist", "Doctor", "Nurse"].includes(role)) h += `<div class="nav" data-go="opd_queue"><span>🎫</span>${isDoc ? "My OPD" : "OPD Queue"}</div>`;
+  if (role === "Admin") h += `<div class="nav" data-go="settings"><span>⚙️</span>Hospital Setup & Master Data</div>`;
+  if (role === "Admin" || role === "Doctor") h += `<div class="nav" data-go="gemini_ai"><span>✨</span>Gemini AI Hub</div>`;
   if (META.reports) h += `<div class="nav" data-go="reports"><span>📈</span>Reports</div>`;
-  if (META.user.role === "Admin" || META.user.role === "Accountant") {
-    h += `<div class="nav" data-go="accounts"><span>💳</span>Accounts & Finance</div>`;
-  if (META.user.role === "Admin" || META.user.role === "Pharmacist") {
-    h += `<div class="nav" data-go="inventory_alerts"><span>⚠️</span>Inventory Alerts</div>`;
-  }
-  }
-  if (META.user.role === "Admin") {
-    h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
-  }
+  if (role === "Admin" || role === "Accountant") h += `<div class="nav" data-go="accounts"><span>💳</span>Accounts & Finance</div>`;
+  if (role === "Admin" || role === "Pharmacist") h += `<div class="nav" data-go="inventory_alerts"><span>⚠️</span>Inventory Alerts</div>`;
+  if (role === "Admin") h += `<div class="nav" data-go="db_studio"><span>🗄️</span>Database Studio</div>`;
   for (const [g, list] of Object.entries(groups)) { h += `<div class="sgroup">${g}</div>`; list.forEach(r => h += `<div class="nav" data-go="${r.key}"><span>${r.icon}</span>${esc(r.label)}</div>`); }
   $("#sidebar").innerHTML = h;
-  go(location.hash.slice(1) || "dashboard");
+  go(location.hash.slice(1) || (META.user.role === "Doctor" ? "opd_queue" : "dashboard"));
 }
 $("#sidebar").onclick = e => { const n = e.target.closest("[data-go]"); if (n) { go(n.dataset.go); $("#sidebar").classList.remove("open"); } };
 function go(key) {
@@ -2203,4 +2197,3 @@ async function renderAccounts() {
 }
 
 boot();
-
