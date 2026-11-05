@@ -310,6 +310,10 @@ async function renderRxStudio() {
       <table class="mini" id="rxLines" style="margin-top:8px"><tr><th>Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th></th></tr></table>
       <button class="btn primary" id="rxSave" style="margin-top:10px">Save prescription</button>
       <div id="rxMsg" class="muted small" style="margin-top:6px"></div>
+    </div>
+    <div class="grid cols2" style="margin-top:12px">
+      <div class="card"><b>Pharmacy Rx queue</b><div id="rxQueue" class="muted small" style="margin-top:8px">Loading…</div></div>
+      <div class="card"><b>Reports</b><div id="rxRep" class="muted small" style="margin-top:8px">Loading…</div></div>
     </div>`;
   const lines = [];
   const drawLines = () => {
@@ -2555,6 +2559,8 @@ async function renderRxStudio() {
   document.getElementById("rxSave").onclick = async () => {
     const pid = document.getElementById("rxPatient").value;
     if (!pid || !lines.length) { document.getElementById("rxMsg").textContent = "Patient and at least one drug required."; return; }
+    const chk = await api("/rx/check", { method: "POST", body: { patient_id: pid, items: lines } }).catch(() => ({ warnings: [] }));
+    if ((chk.warnings || []).length && !confirm("Safety warnings:\n" + chk.warnings.join("\n") + "\nSign anyway?")) return;
     const r = await api("/rx", { method: "POST", body: {
       patient_id: pid, doctor_id: document.getElementById("rxDoctor").value,
       diagnosis: document.getElementById("rxDx").value, follow_up: document.getElementById("rxFollow").value,
@@ -2571,6 +2577,19 @@ async function renderRxStudio() {
     w.document.write(`<title>Prescription</title><body style="font-family:sans-serif;width:480px;margin:16px"><h2>${META.hospital}</h2><p>${rx.patient}<br>Dx: ${rx.dx}</p><table border="1" cellpadding="6" cellspacing="0" width="100%"><tr><th>Drug</th><th>Dose</th><th>Freq</th><th>Days</th></tr>${rowsHtml}</table><p>AI suggestion – doctor to verify<br>Verify token on file</p></body>`);
     w.document.close(); w.print();
   };
+  const loadSide = async () => {
+    const q = await api("/rx/queue").catch(() => ({ queue: [] }));
+    document.getElementById("rxQueue").innerHTML = (q.queue || []).map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0"><span>#${r.id} ${r.patient || ""} · ${r.diagnosis || ""}</span><button class="btn sm" data-disp="${r.id}">Dispense</button></div>`).join("") || "None pending";
+    document.getElementById("rxQueue").onclick = async e => {
+      const b = e.target.closest("[data-disp]");
+      if (!b) return;
+      await api("/rx/dispense", { method: "POST", body: { rx_id: b.dataset.disp } });
+      loadSide();
+    };
+    const rep = await api("/rx/reports").catch(() => ({ top_drugs: [] }));
+    document.getElementById("rxRep").innerHTML = (rep.top_drugs || []).map(d => (d.brand || "—") + " · " + d.n).join("<br>") || "No data yet";
+  };
+  loadSide();
   draw();
 }
 
