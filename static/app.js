@@ -217,7 +217,7 @@ async function boot() {
 }
 $("#sidebar").onclick = e => { const n = e.target.closest("[data-go]"); if (n) { go(n.dataset.go); $("#sidebar").classList.remove("open"); } };
 function go(key) {
-  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio", "accounts"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
+  if (!["dashboard", "reports", "gemini_ai", "settings", "db_studio", "accounts", "opd_queue", "inventory_alerts"].includes(key) && !META.resources.find(r => r.key === key)) key = "dashboard";
   current = key; location.hash = key;
   document.querySelectorAll(".nav").forEach(n => n.classList.toggle("active", n.dataset.go === key));
   if (key === "dashboard") { $("#pageTitle").textContent = "Dashboard"; return renderDashboard(); }
